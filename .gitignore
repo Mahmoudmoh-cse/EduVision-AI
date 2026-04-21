@@ -206,3 +206,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# EduVision computer vision data and generated artifacts
+data/students/*
+!data/students/.gitkeep
+data/embeddings/*
+!data/embeddings/.gitkeep
+data/logs/*
+!data/logs/.gitkeep
+data/models/*
+!data/models/.gitkeep

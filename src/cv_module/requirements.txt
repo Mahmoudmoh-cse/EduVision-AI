@@ -1,0 +1,17 @@
+# CV module runtime dependencies
+opencv-python>=4.11,<5.0
+numpy>=2.0,<3.0
+insightface==0.7.3
+# CPU-safe default. On CUDA machines, replace this with onnxruntime-gpu==1.24.4.
+onnxruntime==1.24.4
+emotiefflib==1.1.1
+tqdm>=4.67,<5.0
+scikit-learn>=1.8,<2.0
+
+# Optional FastAPI integration
+fastapi==0.136.0
+pydantic==2.10.3
+uvicorn[standard]
+
+# Optional test dependency for the CV module
+pytest==8.3.4
