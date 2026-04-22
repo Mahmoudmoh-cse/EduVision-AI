@@ -1,53 +1,66 @@
 """
-Smart Classroom Speech Module — Google Speech API Edition
-=========================================================
-Uses sr.recognize_google() exactly like your original code,
-with all accuracy improvements applied on top:
-  • Multi-pass noise reduction
-  • Per-sentence question detection (catches questions mid-conversation)
-  • Intonation heuristic
-  • Better recording settings
+Smart Classroom Speech Module — Bilingual Edition
+==================================================
+• Arabic speech  → automatically translated to English
+• English speech → kept as-is
+• All UI messages in English
+• Multi-pass noise reduction + intonation heuristic
+• Google Speech API (en-US first, then ar-EG fallback)
+• Optional OpenAI Whisper with task="translate" (always outputs English)
 
 Dependencies:
-    pip install noisereduce librosa soundfile speechrecognition numpy scipy
+    pip install noisereduce librosa soundfile speechrecognition numpy scipy deep-translator
+
+Optional (offline, best accuracy):
+    pip install openai-whisper
+    # Also requires ffmpeg in PATH: https://ffmpeg.org/download.html
 """
 
-import speech_recognition as sr
-import noisereduce as nr
-import librosa
-import soundfile as sf
-import numpy as np
-import json
+import os
+import sys
+
+# ── Windows UTF-8 fix ─────────────────────────────────────────────────────────
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+# ─────────────────────────────────────────────────────────────────────────────
+
 import re
+import json
+import numpy as np
+import soundfile as sf
+import librosa
+import noisereduce as nr
+import speech_recognition as sr
+from scipy.signal import lfilter
 from datetime import datetime
 
 
-# ── 1. QUESTION DETECTION ENGINE ─────────────────────────────────────────────
-#
-# Strategy: 5 independent detectors scan ANYWHERE in the sentence.
-# Any single hit → question. This catches questions buried in the middle
-# of longer speech like "I was thinking, but what do you mean by that?"
-#
-# Detector 1 — Explicit question mark
-# Detector 2 — Classic question word at START of sentence
-# Detector 3 — Embedded question fragment ANYWHERE ("do you", "is there" …)
-# Detector 4 — Tag question ANYWHERE ("right?", "isn't it", "don't you think")
-# Detector 5 — Indirect/reported question patterns ("I wonder if", "tell me why")
+# ── CONFIGURATION ─────────────────────────────────────────────────────────────
+USE_WHISPER       = False      # True → Whisper (offline, auto-translate, best accuracy)
+WHISPER_MODEL     = "medium"   # tiny | base | small | medium | large
+PRIMARY_DIALECT   = "ar-EG"    # Arabic dialect for Google fallback
+FALLBACK_DIALECTS = ["ar-SA", "ar-LB", "ar"]
+OUTPUT_DIR        = os.path.dirname(os.path.abspath(__file__))
 # ─────────────────────────────────────────────────────────────────────────────
 
-# D2 — question words that can open a sentence
+def _out(name):
+    return os.path.join(OUTPUT_DIR, name)
+
+
+# ── 1. QUESTION DETECTION ENGINE (English) ────────────────────────────────────
+# All text is English (Arabic gets translated), so patterns are English-only.
+
 _D2_OPENER = re.compile(
-    r"(?:^|\.\s+|\?\s+|!\s+)"          # start or after sentence boundary
+    r"(?:^|\.\s+|\?\s+|!\s+)"
     r"(what|why|how|when|where|who|which|whose|whom"
     r"|can|could|would|should|shall|will|may|might|must"
-    r"|is|are|was|were|do|does|did|have|has|had|am)\b",
+    r"|is|are|was|were|do|does|did|have|has|had)\b",
     re.IGNORECASE,
 )
 
-# D3 — embedded question phrases that signal a question ANYWHERE in text
 _D3_EMBEDDED = re.compile(
     r"\b("
-    # auxiliary + subject combos
     r"do you|does he|does she|does it|do we|do they"
     r"|did you|did he|did she|did it|did we|did they"
     r"|are you|is he|is she|is it|are we|are they"
@@ -64,7 +77,8 @@ _D3_EMBEDDED = re.compile(
     r"|is this|is that|are these|are those"
     r"|what is|what are|what was|what were|what do|what did|what have"
     r"|why is|why are|why do|why did|why would|why can|why should"
-    r"|how is|how are|how do|how did|how can|how would|how should|how much|how many|how long|how often|how far"
+    r"|how is|how are|how do|how did|how can|how would|how should"
+    r"|how much|how many|how long|how often|how far"
     r"|when is|when are|when do|when did|when will|when would|when can"
     r"|where is|where are|where do|where did|where will|where would|where can"
     r"|who is|who are|who was|who were|who will|who would|who can|who did"
@@ -73,7 +87,6 @@ _D3_EMBEDDED = re.compile(
     re.IGNORECASE,
 )
 
-# D4 — tag questions that appear ANYWHERE (end or middle)
 _D4_TAG = re.compile(
     r"\b("
     r"right\??|correct\??|yeah\??|ok\??"
@@ -88,7 +101,6 @@ _D4_TAG = re.compile(
     re.IGNORECASE,
 )
 
-# D5 — indirect/reported question patterns (question embedded after a verb)
 _D5_INDIRECT = re.compile(
     r"\b("
     r"I wonder (if|whether|what|why|how|when|where|who)"
@@ -105,7 +117,6 @@ _D5_INDIRECT = re.compile(
     re.IGNORECASE,
 )
 
-# Greetings — never a question even if they start with "how"
 _GREETINGS = re.compile(
     r"^(hello|hi|hey|good morning|good afternoon|good evening|greetings"
     r"|how are you|how('?s| is) it going|how('?s| is) everything)\b",
@@ -114,47 +125,26 @@ _GREETINGS = re.compile(
 
 
 def _is_question(text: str) -> bool:
-    """
-    Returns True if ANY part of the text contains a question.
-    Scans the FULL text — not just the start — so mid-sentence
-    questions like 'I was thinking, but what do you mean?' are caught.
-    """
     s = text.strip()
     if not s:
         return False
-
-    # Greeting override (e.g. "How are you" is NOT a question here)
     if _GREETINGS.match(s):
         return False
-
-    # D1 — explicit question mark anywhere
     if "?" in s:
         return True
-
-    # D2 — question-opening word (handles sentence boundaries inside the chunk)
     if _D2_OPENER.search(s):
         return True
-
-    # D3 — embedded auxiliary+subject combo anywhere
     if _D3_EMBEDDED.search(s):
         return True
-
-    # D4 — tag question anywhere
     if _D4_TAG.search(s):
         return True
-
-    # D5 — indirect question pattern anywhere
     if _D5_INDIRECT.search(s):
         return True
-
     return False
 
 
-# ── SENTENCE SPLITTER ────────────────────────────────────────────────────────
-# Google Speech rarely returns punctuation, so we use a smart splitter that
-# detects clause boundaries from spoken discourse markers.
+# ── SENTENCE SPLITTER (English) ───────────────────────────────────────────────
 
-# Discourse transitions that almost always separate two independent clauses
 _SPLIT_MARKERS = re.compile(
     r"\s+(?="
     r"but (what|why|how|when|where|who|can|could|do|does|did|is|are|was|were|will|would|have|has)"
@@ -167,7 +157,6 @@ _SPLIT_MARKERS = re.compile(
     re.IGNORECASE,
 )
 
-# Spoken question starters that clearly begin a new thought
 _QUESTION_STARTERS = re.compile(
     r"\s+(?="
     r"(?:what|why|how|when|where|who|which)"
@@ -177,47 +166,30 @@ _QUESTION_STARTERS = re.compile(
 )
 
 
+def _split_by_embedded_questions(text: str) -> list:
+    parts = _SPLIT_MARKERS.split(text)
+    if len(parts) == 1:
+        parts = _QUESTION_STARTERS.split(text)
+    return [p.strip() for p in parts if p.strip()]
+
+
 def _split_into_sentences(text: str) -> list:
     text = " ".join(text.split())
-
-    # If Google gave us punctuation, honour it first
     if any(p in text for p in [".", "?", "!"]):
         parts = re.split(r"(?<=[.?!])\s+", text)
-        # Then also split within each part on embedded question patterns
         final = []
         for p in parts:
-            sub = _split_by_embedded_questions(p)
-            final.extend(sub)
+            final.extend(_split_by_embedded_questions(p))
         return [s.strip() for s in final if s.strip()]
-
-    # No punctuation path — split on discourse markers + embedded questions
     parts = re.split(
         r"\s+(?:and then|but then|however|also|because|after that"
         r"|okay so|alright so|now|anyway)\s+",
         text, flags=re.IGNORECASE,
     )
-
     final = []
     for p in parts:
-        sub = _split_by_embedded_questions(p)
-        final.extend(sub)
-
+        final.extend(_split_by_embedded_questions(p))
     return [s.strip() for s in final if s.strip()]
-
-
-def _split_by_embedded_questions(text: str) -> list:
-    """
-    Further splits a chunk by detecting where a question begins mid-sentence.
-    e.g. "I was talking about it but what do you think about that"
-      → ["I was talking about it", "but what do you think about that"]
-    """
-    # Try discourse-marker-before-question-word splits
-    parts = _SPLIT_MARKERS.split(text)
-    if len(parts) == 1:
-        # Try raw question-word-opener splits
-        parts = _QUESTION_STARTERS.split(text)
-
-    return [p.strip() for p in parts if p.strip()]
 
 
 def _format_sentence(sentence: str, question: bool) -> str:
@@ -229,10 +201,6 @@ def _format_sentence(sentence: str, question: bool) -> str:
 
 
 def clean_text(text: str) -> list:
-    """
-    Split text into clauses and label each as question or statement.
-    Returns: [{"sentence": "...", "is_question": bool}, ...]
-    """
     sentences = _split_into_sentences(text)
     results = []
     for sent in sentences:
@@ -241,84 +209,149 @@ def clean_text(text: str) -> list:
     return results
 
 
-# ── 2. RECORD AUDIO (PUSH-TO-TALK) ────────────────────────────────────────────
+# ── 2. LANGUAGE DETECTION & TRANSLATION ──────────────────────────────────────
+
+def _is_arabic(text: str) -> bool:
+    """Returns True if text contains Arabic Unicode characters."""
+    return bool(re.search(r"[\u0600-\u06FF]", text))
+
+
+def _translate_to_english(text: str) -> str:
+    """Translate Arabic text to English using deep-translator (free, no API key)."""
+    try:
+        from deep_translator import GoogleTranslator
+        result = GoogleTranslator(source="ar", target="en").translate(text)
+        return result or text
+    except ImportError:
+        print("  [!] deep-translator not installed. Run: pip install deep-translator")
+        return text
+    except Exception as e:
+        print(f"  [!] Translation failed: {e}")
+        return text
+
+
+# ── 3. RECORD AUDIO (PUSH-TO-TALK) ────────────────────────────────────────────
 
 def record_audio():
     r = sr.Recognizer()
-    r.energy_threshold = 200           # lower = more sensitive
-    r.dynamic_energy_threshold = True  # auto-adjusts to room noise
-    r.pause_threshold = 1.2            # waits 1.2 s of silence before stopping
+    r.energy_threshold = 200
+    r.dynamic_energy_threshold = True
+    r.pause_threshold = 1.5
 
-    input("🎤 Press ENTER to START recording...")
+    try:
+        with sr.Microphone() as source:
+            print("Adjusting for ambient noise...")
+            r.adjust_for_ambient_noise(source, duration=1.5)
+            print("Recording... Speak now!")
+            try:
+                audio = r.listen(source, timeout=15, phrase_time_limit=60)
+            except sr.WaitTimeoutError:
+                print("No speech detected — timeout.")
+                return None
+    except KeyboardInterrupt:
+        print("\nRecording cancelled.")
+        return None
 
-    with sr.Microphone() as source:
-        print("⏳ Adjusting for ambient noise...")
-        r.adjust_for_ambient_noise(source, duration=1.0)
-
-        print("🔴 Recording... Speak now!")
-        audio = r.listen(source)
-
-    print("⏹ Recording finished.")
-
-    file_name = "raw_audio.wav"
+    print("Recording finished.")
+    file_name = _out("raw_audio.wav")
     with open(file_name, "wb") as f:
         f.write(audio.get_wav_data())
-
-    print(f"✅ Saved raw audio: {file_name}")
+    print(f"Raw audio saved: {file_name}")
     return file_name
 
 
-# ── 3. CLEAN AUDIO (NOISE REDUCTION) ─────────────────────────────────────────
+# ── 4. CLEAN AUDIO (NOISE REDUCTION) ─────────────────────────────────────────
 
-def clean_audio(input_file, output_file="clean_audio.wav"):
+def clean_audio(input_file, output_file=None):
+    if output_file is None:
+        output_file = _out("clean_audio.wav")
+
     y, sr_rate = librosa.load(input_file, sr=None)
-
-    print("🧹 Reducing noise...")
+    print("Reducing noise...")
 
     # Pass 1 — stationary noise (AC hum, fan)
-    reduced_noise = nr.reduce_noise(y=y, sr=sr_rate, stationary=True, prop_decrease=0.85)
-
-    # Pass 2 — non-stationary noise (sudden sounds, shuffling)
-    reduced_noise = nr.reduce_noise(y=reduced_noise, sr=sr_rate, stationary=False, prop_decrease=0.75)
-
-    # Pre-emphasis: sharpens consonants Google often mishears in noise
-    reduced_noise = np.append(reduced_noise[0], reduced_noise[1:] - 0.97 * reduced_noise[:-1])
-
-    # Normalise
-    max_val = np.max(np.abs(reduced_noise))
+    reduced = nr.reduce_noise(y=y, sr=sr_rate, stationary=True, prop_decrease=0.85)
+    # Pass 2 — non-stationary noise (shuffling, sudden sounds)
+    reduced = nr.reduce_noise(y=reduced, sr=sr_rate, stationary=False, prop_decrease=0.75)
+    # Pre-emphasis — sharpens consonants (lfilter: no extra array allocation)
+    reduced = lfilter([1.0, -0.97], [1.0], reduced).astype(reduced.dtype)
+    # Normalise to 95% peak
+    max_val = np.max(np.abs(reduced))
     if max_val > 0:
-        reduced_noise = reduced_noise / max_val * 0.95
+        reduced = reduced / max_val * 0.95
 
-    sf.write(output_file, reduced_noise, sr_rate, subtype='PCM_16')
-
-    print(f"✅ Clean audio saved: {output_file}")
+    sf.write(output_file, reduced, sr_rate, subtype="PCM_16")
+    print(f"Clean audio saved: {output_file}")
     return output_file
 
 
-# ── 4. SPEECH → TEXT (GOOGLE API) ────────────────────────────────────────────
+# ── 5. SPEECH → TEXT + AUTO-TRANSLATE ────────────────────────────────────────
 
-def speech_to_text(audio_file):
+def _transcribe_google(audio_file: str) -> str:
+    """Try English first, then Arabic dialects as fallback."""
     r = sr.Recognizer()
-
     with sr.AudioFile(audio_file) as source:
         audio = r.record(source)
 
+    dialects = ["en-US", PRIMARY_DIALECT] + FALLBACK_DIALECTS
+    for dialect in dialects:
+        try:
+            print(f"  Trying {dialect}...")
+            text = r.recognize_google(audio, language=dialect)
+            if text:
+                print(f"  Got result ({dialect}).")
+                return text
+        except sr.UnknownValueError:
+            continue
+        except sr.RequestError as e:
+            return f"ERROR: API error: {e}"
+
+    return "ERROR: Could not understand audio"
+
+
+def _transcribe_whisper(audio_file: str) -> str:
+    """Whisper with task=translate always outputs English regardless of input language."""
     try:
-        print("🧠 Sending to Google Speech API...")
-        text = r.recognize_google(audio)
-        return text
+        import whisper
+    except ImportError:
+        return "ERROR: Whisper not installed. Run: pip install openai-whisper"
 
-    except sr.UnknownValueError:
-        return "❌ Could not understand audio"
+    print(f"Loading Whisper model ({WHISPER_MODEL})...")
+    model = whisper.load_model(WHISPER_MODEL)
+    print("Transcribing and translating to English (Whisper)...")
+    result = model.transcribe(audio_file, task="translate")
+    return result.get("text", "").strip()
 
-    except sr.RequestError as e:
-        return f"❌ API error: {e}"
+
+def speech_to_text(audio_file: str):
+    """
+    Returns (display_text, original_text, was_translated).
+    Arabic input is automatically translated to English.
+    English input is returned unchanged.
+    """
+    print("Transcribing audio...")
+
+    if USE_WHISPER:
+        text = _transcribe_whisper(audio_file)
+        return text, text, False
+
+    raw = _transcribe_google(audio_file)
+
+    if raw.startswith("ERROR:"):
+        return raw, raw, False
+
+    if _is_arabic(raw):
+        print(f"  Arabic detected — translating to English...")
+        translated = _translate_to_english(raw)
+        return translated, raw, True
+
+    return raw, raw, False
 
 
-# ── 5. INTONATION HEURISTIC ───────────────────────────────────────────────────
+# ── 6. INTONATION HEURISTIC ──────────────────────────────────────────────────
 
-def _ends_with_rising_pitch(audio_file):
-    """Checks if energy rises at the end — rough signal for a question."""
+def _ends_with_rising_pitch(audio_file: str) -> bool:
+    """Returns True if RMS energy rises at end — rough signal for a question."""
     try:
         y, sr_rate = librosa.load(audio_file, sr=None, mono=True)
         half = int(0.5 * sr_rate)
@@ -331,14 +364,14 @@ def _ends_with_rising_pitch(audio_file):
         return False
 
 
-# ── 6. SAVE TO JSON ───────────────────────────────────────────────────────────
+# ── 7. SAVE TO JSON ───────────────────────────────────────────────────────────
 
-def save_to_json(sentences, raw_text, filename="nlp_log.json"):
-    record = {
-        "raw_text": raw_text,
-        "sentences": sentences,
-        "timestamp": datetime.now().isoformat()
-    }
+def save_to_json(sentences, filename=None):
+    """
+    Appends each sentence as a flat entry: {"sentence": "...", "is_question": bool}
+    """
+    if filename is None:
+        filename = _out("nlp_log.json")
 
     try:
         with open(filename, "r", encoding="utf-8") as f:
@@ -346,67 +379,96 @@ def save_to_json(sentences, raw_text, filename="nlp_log.json"):
     except (FileNotFoundError, json.JSONDecodeError):
         data = []
 
-    data.append(record)
+    for item in sentences:
+        data.append({
+            "sentence":   item["sentence"],
+            "is_question": item["is_question"],
+        })
 
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-    print(f"💾 Saved to {filename}")
+    print(f"Saved {len(sentences)} sentence(s) to: {filename}")
 
 
-# ── 7. FULL PIPELINE ──────────────────────────────────────────────────────────
+# ── 8. FULL PIPELINE ──────────────────────────────────────────────────────────
 
 def push_to_talk_pipeline():
     # Step 1: Record
     raw_file = record_audio()
+    if raw_file is None:
+        return []
 
     # Step 2: Clean audio
     clean_file = clean_audio(raw_file)
 
-    # Step 3: Speech → text
-    raw_text = speech_to_text(clean_file)
+    # Step 3: Transcribe + auto-translate if Arabic
+    display_text, original_text, was_translated = speech_to_text(clean_file)
 
-    # Step 4: Show raw output
-    print("\n" + "=" * 40)
-    print("🧠 RAW TEXT:")
-    print(raw_text)
+    # Step 4: Show output
+    print("\n" + "=" * 50)
+    if was_translated:
+        print(f"ORIGINAL  (Arabic)  : {original_text}")
+        print(f"TRANSLATED (English): {display_text}")
+    else:
+        print(f"TEXT: {display_text}")
 
     rising = _ends_with_rising_pitch(clean_file)
     if rising:
-        print("📈 (Intonation hint: rising energy detected at end)")
-    print("=" * 40)
+        print("Intonation hint: rising pitch at end — possible question")
+    print("=" * 50)
 
-    if not raw_text or "❌" in raw_text:
-        print("⚠️ Ignored invalid or unclear audio (not saved).")
+    if not display_text or "ERROR:" in display_text:
+        print("Audio unclear or error — skipped.")
         return []
 
-    # Step 5: Split into sentences + detect questions
-    sentences = clean_text(raw_text)
+    # Step 5: Detect questions on the English text
+    sentences = clean_text(display_text)
 
-    print("\n✨ DETECTED SENTENCES:")
+    # Integrate intonation: promote last sentence if rising pitch
+    if rising and sentences and not sentences[-1]["is_question"]:
+        last = sentences[-1]
+        last["is_question"] = True
+        last["sentence"] = last["sentence"].rstrip(".!") + "?"
+        last["intonation_promoted"] = True
+        print("Intonation promoted last sentence to question.")
+
+    print("\nDetected sentences:")
     for i, item in enumerate(sentences, 1):
-        label = "❓ QUESTION" if item["is_question"] else "💬 Statement"
-        print(f"  [{i}] {label}: {item['sentence']}")
-    print("=" * 40 + "\n")
+        promoted = " [pitch]" if item.get("intonation_promoted") else ""
+        label = "QUESTION" if item["is_question"] else "Statement"
+        print(f"  [{i}] {label}{promoted}: {item['sentence']}")
+    print("=" * 50 + "\n")
 
     # Step 6: Save
     if sentences:
-        save_to_json(sentences, raw_text)
+        save_to_json(sentences)
     else:
-        print("⚠️ Nothing to save.")
+        print("Nothing to save.")
 
     return sentences
 
 
-# ── 8. RUN SYSTEM ─────────────────────────────────────────────────────────────
+# ── 9. RUN SYSTEM ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("\n--- 🎓 Smart Classroom Speech Module ---\n")
+    engine = (
+        f"Whisper ({WHISPER_MODEL}) [auto-translate]"
+        if USE_WHISPER
+        else f"Google Speech + deep-translator"
+    )
+    print("\n--- Smart Classroom Speech Module ---")
+    print(f"    Engine   : {engine}")
+    print( "    Arabic   : auto-translated to English")
+    print( "    English  : kept as-is")
+    print( "    Press Ctrl+C or type Q to exit\n")
 
-    while True:
-        push_to_talk_pipeline()
-
-        choice = input("Press Q to quit or ENTER to record again: ")
-        if choice.lower() == "q":
-            print("👋 Exiting system...")
-            break
+    try:
+        while True:
+            choice = input("[ENTER] Start recording   [Q] Quit : ")
+            if choice.strip().lower() == "q":
+                print("Exiting...")
+                break
+            push_to_talk_pipeline()
+    except KeyboardInterrupt:
+        print("\nStopped (Ctrl+C). Exiting...")
