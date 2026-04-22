@@ -50,11 +50,11 @@ def main() -> None:
     if not _check_microphone():
         sys.exit(1)
 
-    print("✅ Microphone ready")
+    print("Microphone ready")
 
     try:
         while True:
-            print("\n🎤 Speak now... (Ctrl+C to exit)")
+            print("\n Speak now... (Ctrl+C to exit)")
 
             try:
                 raw_text = capture_speech(lang)
@@ -64,7 +64,7 @@ def main() -> None:
                 print(f"[CLEANED] {cleaned_text}")
 
             except sr.UnknownValueError:
-                print("⚠️ Could not understand audio, please try again")
+                print("Could not understand audio, please try again")
             except sr.RequestError as e:
                 print(f"Google API error: {e}")
             except Exception as e:
@@ -73,7 +73,7 @@ def main() -> None:
             print("─" * 50)
 
     except KeyboardInterrupt:
-        print("\n👋 Exiting")
+        print("\n Exiting")
         sys.exit(0)
 
 
