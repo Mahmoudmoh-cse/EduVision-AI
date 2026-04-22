@@ -79,3 +79,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+# python main.py
+# or explicitly set language:
+#python main.py --lang en-US
