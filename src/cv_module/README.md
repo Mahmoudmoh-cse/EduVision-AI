@@ -4,11 +4,22 @@
 
 This module provides a local, real-time computer vision pipeline for the EduVision Smart Classroom Assistant.
 
-## Models 
-Detection: SCRFD
-Alignment: landmark model
-Recognition: ArcFace embeddings
-Matching: cosine similarity
+## Models
+
+- Detection:
+  `InsightFace buffalo_l` detector (`det_10g`, SCRFD-family)
+- Alignment:
+  5-point landmark-based alignment from `InsightFace FaceAnalysis` followed by `face_align.norm_crop`
+- Recognition:
+  `InsightFace buffalo_l` recognition model producing ArcFace-style normalized embeddings
+- Matching:
+  cosine similarity against enrolled student embeddings
+- Emotion:
+  `EmotiEffLib` ONNX backend using `enet_b0_8_best_vgaf`
+- Tracking:
+  lightweight IoU plus centroid matching, no separate tracking model
+- Attendance confirmation:
+  rule-based temporal smoothing, no separate attendance model
 
 It is designed for:
 
@@ -52,11 +63,11 @@ tests/
 ## Model Stack
 
 - Face detection and alignment:
-  `InsightFace FaceAnalysis` with the `buffalo_l` model pack.
+  `InsightFace FaceAnalysis` with the `buffalo_l` model pack, using its built-in detector and landmark outputs for alignment.
 - Face recognition:
-  ArcFace-style normalized embeddings with cosine similarity, thresholding, and top-1 vs top-2 margin checks.
+  ArcFace-style normalized embeddings from the `buffalo_l` recognition model, compared with cosine similarity, thresholding, and top-1 vs top-2 margin checks.
 - Mood impression:
-  `EmotiEffLib` with the ONNX backend by default through a lightweight wrapper.
+  `EmotiEffLib` with the ONNX backend by default through a lightweight wrapper, using the `enet_b0_8_best_vgaf` model.
 - Tracking:
   Simple IoU plus centroid matching without heavy multi-object tracking dependencies.
 
