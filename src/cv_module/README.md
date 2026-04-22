@@ -4,6 +4,12 @@
 
 This module provides a local, real-time computer vision pipeline for the EduVision Smart Classroom Assistant.
 
+## Models 
+Detection: SCRFD
+Alignment: landmark model
+Recognition: ArcFace embeddings
+Matching: cosine similarity
+
 It is designed for:
 
 - face detection and alignment
