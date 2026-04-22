@@ -4,6 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import logging
 
 import cv2
 
@@ -14,6 +15,9 @@ from .emotion import EmotionEstimator, EmotionResult
 from .logger import SessionLogger
 from .recognizer import FaceRecognizer, RecognitionResult
 from .tracker import FaceTracker, TrackState
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -51,9 +55,22 @@ class SmartClassroomPipeline:
         self._last_results: list[FrameFaceResult] = []
         self._finalized = False
         self._summary_cache: dict[str, object] | None = None
+        self._display_supported: bool | None = None
 
     def _make_timestamp(self) -> str:
         return datetime.now().astimezone().isoformat(timespec="seconds")
+
+    def _has_highgui_support(self) -> bool:
+        if self._display_supported is not None:
+            return self._display_supported
+
+        try:
+            build_info = cv2.getBuildInformation()
+            self._display_supported = "GUI:                           NONE" not in build_info
+        except Exception:
+            self._display_supported = False
+
+        return self._display_supported
 
     def _smooth_emotion(self, track: TrackState) -> EmotionResult:
         if not track.emotion_history:
@@ -209,6 +226,13 @@ class SmartClassroomPipeline:
         if capture is None or not capture.isOpened():
             raise RuntimeError("Could not open the requested video source.")
 
+        if display and not self._has_highgui_support():
+            LOGGER.warning(
+                "OpenCV was installed without GUI support. Continuing in headless mode. "
+                "Use --headless explicitly or reinstall a GUI-enabled OpenCV build if you need a live window."
+            )
+            display = False
+
         writer = self._build_writer(capture, output_path)
         try:
             while True:
@@ -221,16 +245,26 @@ class SmartClassroomPipeline:
                     writer.write(annotated_frame)
 
                 if display:
-                    cv2.imshow(self.config.display_window_name, annotated_frame)
-                    key = cv2.waitKey(1) & 0xFF
-                    if key in (27, ord("q")):
-                        break
+                    try:
+                        cv2.imshow(self.config.display_window_name, annotated_frame)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key in (27, ord("q")):
+                            break
+                    except cv2.error as exc:
+                        LOGGER.warning(
+                            "OpenCV display is unavailable at runtime. Continuing in headless mode: %s",
+                            exc,
+                        )
+                        display = False
         finally:
             capture.release()
             if writer is not None:
                 writer.release()
             if display:
-                cv2.destroyAllWindows()
+                try:
+                    cv2.destroyAllWindows()
+                except cv2.error:
+                    pass
 
         return self.finalize()
 

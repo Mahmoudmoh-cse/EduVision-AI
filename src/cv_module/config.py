@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 
 
@@ -83,6 +83,10 @@ class CVConfig:
         self.embeddings_path = Path(self.embeddings_path)
         self.device = self.device.lower()
         self.emotion_engine = self.emotion_engine.lower()
+        if self.insightface_model_pack != "buffalo_l":
+            raise ValueError(
+                "This project is configured to use only the InsightFace buffalo_l model pack."
+            )
         if self.ort_providers is None:
             self.ort_providers = default_ort_providers(self.device)
 

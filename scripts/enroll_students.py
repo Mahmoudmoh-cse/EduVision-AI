@@ -25,7 +25,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--students-dir", type=Path, default=PROJECT_ROOT / "data" / "students")
     parser.add_argument("--embeddings-path", type=Path, default=PROJECT_ROOT / "data" / "embeddings" / "student_embeddings.pkl")
     parser.add_argument("--logs-dir", type=Path, default=PROJECT_ROOT / "data" / "logs")
-    parser.add_argument("--model-pack", default="buffalo_l", choices=["buffalo_l", "buffalo_m"])
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument("--min-detection-score", type=float, default=0.70)
     parser.add_argument("--min-face-size", type=int, default=80)
@@ -48,7 +47,6 @@ def iter_image_paths(student_dir: Path) -> list[Path]:
 def main() -> int:
     args = parse_args()
     config = CVConfig(
-        insightface_model_pack=args.model_pack,
         device=args.device or detect_device(),
         students_dir=args.students_dir,
         embeddings_path=args.embeddings_path,

@@ -22,7 +22,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--camera-index", type=int, default=0)
     parser.add_argument("--embeddings-path", type=Path, default=PROJECT_ROOT / "data" / "embeddings" / "student_embeddings.pkl")
     parser.add_argument("--logs-dir", type=Path, default=PROJECT_ROOT / "data" / "logs")
-    parser.add_argument("--model-pack", default="buffalo_l", choices=["buffalo_l", "buffalo_m"])
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument("--frame-skip", type=int, default=0)
     parser.add_argument("--recognition-threshold", type=float, default=0.45)
@@ -36,7 +35,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     config = CVConfig(
-        insightface_model_pack=args.model_pack,
         device=args.device or detect_device(),
         embeddings_path=args.embeddings_path,
         logs_dir=args.logs_dir,

@@ -52,7 +52,7 @@ tests/
 ## Model Stack
 
 - Face detection and alignment:
-  `InsightFace FaceAnalysis` with `buffalo_l` by default and `buffalo_m` as a lighter option.
+  `InsightFace FaceAnalysis` with the `buffalo_l` model pack.
 - Face recognition:
   ArcFace-style normalized embeddings with cosine similarity, thresholding, and top-1 vs top-2 margin checks.
 - Mood impression:
@@ -85,7 +85,7 @@ From the repository root:
 CPU-safe default:
 
 ```powershell
-python -m pip install -r src/cv_module/requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 Optional NVIDIA/CUDA path for faster InsightFace inference:
@@ -95,7 +95,19 @@ python -m pip uninstall -y onnxruntime
 python -m pip install onnxruntime-gpu==1.24.4
 ```
 
-The module-specific requirements file keeps the CV stack isolated and easier to discuss in presentations. The root `requirements.txt` can still be used if you want the broader project environment.
+The project uses a single root `requirements.txt` for all modules.
+
+If your machine shows an error about `cublasLt64_12.dll` when using `onnxruntime-gpu`, run the CV scripts with CPU explicitly:
+
+```powershell
+python scripts/run_webcam.py --device cpu
+```
+
+If OpenCV reports that `cvShowImage` or `cvDestroyAllWindows` is not implemented, your current OpenCV build has no GUI backend. In that case, use:
+
+```powershell
+python scripts/run_webcam.py --headless
+```
 
 ## Enrollment
 
@@ -115,7 +127,7 @@ python scripts/enroll_students.py
 Example:
 
 ```powershell
-python scripts/enroll_students.py --model-pack buffalo_m --min-detection-score 0.75 --blur-threshold 120
+python scripts/enroll_students.py --min-detection-score 0.75 --blur-threshold 120
 ```
 
 The enrollment script rejects images with:
@@ -191,7 +203,7 @@ The CV implementation is intentionally built as plain Python service classes rat
 
 ## Hardware Notes For 4GB VRAM Targets
 
-- Keep `buffalo_l` as the quality default for presentations, but switch to `buffalo_m` when GPU memory or throughput becomes tight.
+- The project uses only `buffalo_l` for face detection and recognition.
 - Increase `frame_skip` to reduce detector load.
 - The emotion module uses a lightweight ONNX backend and can be disabled with `--disable-emotion`.
 - CPU fallback is supported if CUDA or ONNX GPU execution is unavailable.

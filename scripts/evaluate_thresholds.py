@@ -30,7 +30,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--students-dir", type=Path, default=PROJECT_ROOT / "data" / "students")
     parser.add_argument("--pairs-csv", type=Path, default=None, help="Optional CSV with columns: image_a,image_b,is_same")
     parser.add_argument("--logs-dir", type=Path, default=PROJECT_ROOT / "data" / "logs")
-    parser.add_argument("--model-pack", default="buffalo_l", choices=["buffalo_l", "buffalo_m"])
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument("--min-threshold", type=float, default=0.20)
     parser.add_argument("--max-threshold", type=float, default=0.80)
@@ -158,7 +157,6 @@ def compute_metrics(scores_and_labels: list[tuple[float, int]], threshold: float
 def main() -> int:
     args = parse_args()
     config = CVConfig(
-        insightface_model_pack=args.model_pack,
         device=args.device or detect_device(),
         logs_dir=args.logs_dir,
         students_dir=args.students_dir,
@@ -188,7 +186,7 @@ def main() -> int:
 
     report = {
         "config": {
-            "model_pack": args.model_pack,
+            "model_pack": config.insightface_model_pack,
             "device": config.device,
             "min_threshold": args.min_threshold,
             "max_threshold": args.max_threshold,
