@@ -39,6 +39,4 @@ python Speech_recognition.py
 
 ## Output Files
 
-- `raw_audio.wav`: The original unedited audio captured from the microphone.
-- `clean_audio.wav`: The audio after stationary noise reduction and pre-emphasis filtering.
 - `nlp_log.json`: The JSON database storing the recognized sentences, their question/statement classification, and timestamps.
