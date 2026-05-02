@@ -92,10 +92,10 @@ If required fields are missing or set to `null`, FastAPI validation returns `422
 
 ### 1. Install dependencies
 
-This repository does not currently include a Python dependency manifest, so install the needed packages manually:
+From the project root:
 
 ```bash
-python -m pip install fastapi transformers uvicorn pytest
+python -m pip install -r requirements.txt
 ```
 
 ### 2. Run the API
@@ -103,25 +103,25 @@ python -m pip install fastapi transformers uvicorn pytest
 From the project root:
 
 ```bash
-uvicorn nlp_module.classifier:app --app-dir src --reload
+python -m uvicorn nlp_module.classifier:app --app-dir src --host 127.0.0.1 --port 8001
 ```
 
-The API will start locally, usually at:
+The API will start locally at:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8001
 ```
 
 ### 3. Check the health endpoint
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8001/health
 ```
 
 ### 4. Send a classification request
 
 ```bash
-curl -X POST http://127.0.0.1:8000/stt-result \
+curl -X POST http://127.0.0.1:8001/stt-result \
   -H "Content-Type: application/json" \
   -d '{"text":"How does binary search work?","language":"en"}'
 ```
@@ -147,7 +147,7 @@ The module currently has 9 unit tests in `tests/test_nlp_module_api.py`.
 From the project root:
 
 ```bash
-pytest tests/test_nlp_module_api.py
+python -m pytest tests/test_nlp_module_api.py -q
 ```
 
 ## Latest Test Result
@@ -155,9 +155,7 @@ pytest tests/test_nlp_module_api.py
 Latest local run in this workspace:
 
 ```text
-collected 9 items
-tests/test_nlp_module_api.py .........                                   [100%]
-9 passed in 3.16s
+9 passed in 0.51s
 ```
 
 The exact execution time may vary by machine, but all tests passed in the latest run.

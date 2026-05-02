@@ -1,42 +1,68 @@
-# Smart Classroom Speech Module
+# Speech Module
 
-This module provides a complete end-to-end speech recognition pipeline designed for a Smart Classroom environment. It uses **OpenAI's Whisper API** for highly accurate transcription, combined with a custom question detection engine to parse student queries and statements.
+## Overview
 
-## Features
+The `speech_module` provides speech-to-text transcription for EduVision. It uses Whisper for transcription, cleans uploaded or recorded audio, and splits the transcript into sentences marked as questions or statements.
 
-- **Push-to-Talk Recording**: Uses `sounddevice` to capture audio until a silence threshold is reached.
-- **Advanced Noise Reduction**: Implements a multi-pass noise reduction pipeline using `noisereduce` and `librosa` to clean up classroom background noise (AC hum, fans, etc.) before transcription.
-- **OpenAI Whisper Transcription**: Fast and highly accurate speech-to-text using Whisper's `base` model.
-- **Intelligent Sentence Splitting**: Smartly divides transcribed blocks of text into logical sentences based on discourse markers, even when the transcription lacks punctuation.
-- **Deep Question Detection**: Uses a 5-strategy detector (Explicit, Opener, Embedded, Tag, and Indirect) to identify whether a sentence is a question or a statement, even if the question is buried mid-sentence.
-- **Intonation Heuristics**: Detects rising pitch at the end of the audio as a hint for a question.
-- **Data Logging**: Automatically structures the text into clauses with labels (`Question` / `Statement`) and saves the session log into `nlp_log.json`.
+## Files
 
-## Prerequisites
+- `api.py`: FastAPI app with health and transcription endpoints
+- `dom.py`: Pydantic response models
+- `audio.py`: Audio upload loading, noise reduction, and microphone recording
+- `service.py`: Lazy Whisper loading and transcription service
+- `text_processing.py`: Sentence splitting and question detection
+- `Speech_recognition.py`: Small local push-to-talk CLI wrapper
 
-Make sure you have installed the required dependencies:
+## Run The API
 
-```bash
-pip install openai-whisper noisereduce librosa soundfile sounddevice speechrecognition numpy scipy
-```
-
-*Note: You may also need to install `ffmpeg` on your system for Whisper to process audio correctly.*
-
-## Usage
-
-Run the script from your terminal:
+From the project root:
 
 ```bash
-python Speech_recognition.py
+uvicorn speech_module.api:app --app-dir src --reload
 ```
 
-### Workflow:
-1. **Start**: Press `ENTER` to begin recording your voice.
-2. **Speak**: Speak into your microphone. The recording automatically stops after 2 seconds of silence or a maximum of 60 seconds.
-3. **Processing**: The module will automatically clean the audio, run transcription, and analyze the text.
-4. **Output**: The console will display the raw text and the categorized sentences (Question vs. Statement).
-5. **Logs**: The structured data is appended to `nlp_log.json`, while audio files are saved locally as `raw_audio.wav` and `clean_audio.wav`.
+Health check:
 
-## Output Files
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-- `nlp_log.json`: The JSON database storing the recognized sentences, their question/statement classification, and timestamps.
+Transcribe an audio file:
+
+```bash
+curl -X POST http://127.0.0.1:8000/transcribe-file \
+  -F "file=@question.wav"
+```
+
+Example response:
+
+```json
+{
+  "raw_text": "What is computer vision?",
+  "language": "en",
+  "sentences": [
+    {
+      "sentence": "What is computer vision?",
+      "is_question": true
+    }
+  ]
+}
+```
+
+## Run Local Push-To-Talk
+
+From the project root:
+
+```bash
+python src/speech_module/Speech_recognition.py
+```
+
+## Dependencies
+
+Install the root project requirements:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Whisper also requires `ffmpeg` to be installed on the system.
