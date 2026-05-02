@@ -14,13 +14,25 @@ Dependencies:
 
 import whisper
 import noisereduce as nr
-import librosa
-import soundfile as sf
 import numpy as np
 import json
 import re
 import os
+import time
 from datetime import datetime
+
+# Whisper model configuration.
+# Use a smaller model for faster runtime: tiny, base, small, medium, large.
+WHISPER_MODEL_NAME = "tiny"
+_whisper_model = None
+
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        print(f"⏳ Loading Whisper model '{WHISPER_MODEL_NAME}'...")
+        _whisper_model = whisper.load_model(WHISPER_MODEL_NAME)
+    return _whisper_model
+
 
 
 # ── 1. QUESTION DETECTION ENGINE ─────────────────────────────────────────────
@@ -158,12 +170,12 @@ def _is_question(text: str) -> bool:
 # Discourse transitions that almost always separate two independent clauses
 _SPLIT_MARKERS = re.compile(
     r"\s+(?="
-    r"but (?:what|why|how|when|where|who|can|could|do|does|did|is|are|was|were|will|would|have|has)"
-    r"|so (?:what|why|how|when|where|who|can|could|do|does|did|is|are|will|would)"
-    r"|and (?:what|why|how|when|where|who|can|could|do|does|did|is|are|will|would)"
-    r"|now (?:what|why|how|when|where|who|can|could|do|does|did|is|are|will|would)"
-    r"|like (?:what|why|how|when|where|who)"
-    r"|i mean (?:what|why|how|when|where|who)"
+    r"(?:but (?:what|why|how|when|where|who|can|could|do|does|did|is|are|was|were|will|would|have|has))"
+    r"|(?:so (?:what|why|how|when|where|who|can|could|do|does|did|is|are|will|would))"
+    r"|(?:and (?:what|why|how|when|where|who|can|could|do|does|did|is|are|will|would))"
+    r"|(?:now (?:what|why|how|when|where|who|can|could|do|does|did|is|are|will|would))"
+    r"|(?:like (?:what|why|how|when|where|who))"
+    r"|(?:i mean (?:what|why|how|when|where|who))"
     r")",
     re.IGNORECASE,
 )
@@ -218,7 +230,7 @@ def _split_by_embedded_questions(text: str) -> list:
         # Try raw question-word-opener splits
         parts = _QUESTION_STARTERS.split(text)
 
-    return [p.strip() for p in parts if p and p.strip()]
+    return [p.strip() for p in parts if p is not None and p.strip()]
 
 
 def _format_sentence(sentence: str, question: bool) -> str:
@@ -244,123 +256,119 @@ def clean_text(text: str) -> list:
 
 # ── 2. RECORD AUDIO (PUSH-TO-TALK) ────────────────────────────────────────────
 
-def record_audio():
+def record_audio(trigger_event=None, mouth_active_event=None):
     import sounddevice as sd
-    import scipy.io.wavfile as wavfile
     import numpy as np
     import queue
     import sys
-    
+
     sample_rate = 16000  # 16kHz is standard for speech
-    
-    input("🎤 Press ENTER to START recording...")
-    print("🔴 Recording... Speak now! Take your time. (will stop after 5s of silence or ~60s max)")
-    
+
+    if trigger_event is not None:
+        print("🎤 Waiting for voice detection from camera...")
+        trigger_event.wait()
+        trigger_event.clear()  # Reset for next time
+    else:
+        input("🎤 Press ENTER to START recording...")
+        
+    print("🔴 Recording... Speak now! Take your time. (will stop after 3s of silence or ~60s max)")
+
     q = queue.Queue()
-    
+
     def callback(indata, frames, time, status):
         if status:
             print(status, file=sys.stderr)
         q.put(indata.copy())
-    
+
     silence_threshold = 0.005  # More sensitive to quiet speech
-    max_silence_frames = int(sample_rate * 2)  # Reduced to 2 seconds for much faster turn-around
+    max_silence_frames = int(sample_rate * 3)  # Allow very long pauses so you can finish your thoughts
     max_total_frames = int(sample_rate * 60)  # Allow up to 60 seconds of continuous speech
-    
+
     recorded_frames = []
     silence_frames = 0
     total_frames = 0
-    
+
     with sd.InputStream(samplerate=sample_rate, channels=1, dtype='float32', callback=callback):
         while True:
             data = q.get()
             recorded_frames.append(data)
             total_frames += len(data)
-            
+
             # Check for silence in the current chunk
             if np.max(np.abs(data)) < silence_threshold:
                 silence_frames += len(data)
             else:
                 silence_frames = 0
-                
-            if silence_frames > max_silence_frames:
+
+            # SMART STOP LOGIC
+            # If camera says mouth is closed, stop after 0.8s of silence.
+            # If camera says mouth is open, wait up to 3s of silence.
+            if mouth_active_event is not None and not mouth_active_event.is_set():
+                dynamic_max_silence = int(sample_rate * 0.8)
+            else:
+                dynamic_max_silence = max_silence_frames
+
+            if silence_frames > dynamic_max_silence:
                 print("⏹ Silence detected. Recording finished.")
                 break
-                
+
             if total_frames >= max_total_frames:
                 print("⏹ Max duration reached. Recording finished.")
                 break
 
     if recorded_frames:
-        audio_data = np.concatenate(recorded_frames, axis=0)
+        audio_data = np.concatenate(recorded_frames, axis=0).flatten()
         # Strip trailing silence to clean the file up, keep 0.3s of it
         pad_frames = int(sample_rate * 0.3)
         trim_index = max(0, len(audio_data) - silence_frames + pad_frames)
         audio_data = audio_data[:trim_index]
     else:
-        audio_data = np.zeros((0, 1), dtype='float32')
+        audio_data = np.zeros((0,), dtype='float32')
 
-    file_name = os.path.abspath("raw_audio.wav")
-    wavfile.write(file_name, sample_rate, (audio_data * 32767).astype('int16'))
-    
-    print(f"✅ Saved raw audio: {file_name}")
-    return file_name
+    return audio_data, sample_rate
 
 
 # ── 3. CLEAN AUDIO (NOISE REDUCTION) ─────────────────────────────────────────
 
-def clean_audio(input_file, output_file=None):
-    if output_file is None:
-        output_file = os.path.abspath("clean_audio.wav")
-    else:
-        output_file = os.path.abspath(output_file)
-    
-    y, sr_rate = librosa.load(input_file, sr=None)
+def clean_audio(audio_data, sr_rate):
+    if audio_data.size == 0:
+        print("🧹 No audio to clean.")
+        return audio_data, sr_rate
 
-    print("🧹 Reducing noise...")
+    print("🧹 Reducing noise (fast pass)...")
 
-    # Pass 1 — stationary noise (AC hum, fan)
-    reduced_noise = nr.reduce_noise(y=y, sr=sr_rate, stationary=True, prop_decrease=0.85)
+    audio_data = np.asarray(audio_data).flatten().astype('float32')
 
-    # Pass 2 — non-stationary noise removed to significantly speed up processing
-
-    # Pre-emphasis: sharpens consonants Google often mishears in noise
-    reduced_noise = np.append(reduced_noise[0], reduced_noise[1:] - 0.97 * reduced_noise[:-1])
+    # Whisper is highly robust to noise. A single lightweight pass is enough
+    # for stationary noise (e.g., AC hum or fan) and is 2x faster.
+    reduced_noise = nr.reduce_noise(y=audio_data, sr=sr_rate, stationary=True, prop_decrease=0.6)
 
     # Normalise
     max_val = np.max(np.abs(reduced_noise))
     if max_val > 0:
         reduced_noise = reduced_noise / max_val * 0.95
 
-    sf.write(output_file, reduced_noise, sr_rate, subtype='PCM_16')
-
-    print(f"✅ Clean audio saved: {output_file}")
-    return output_file
+    return reduced_noise, sr_rate
 
 
 # ── 4. SPEECH → TEXT (WHISPER API) ────────────────────────────────────────────
 
-print("⏳ Loading Whisper model globally (this happens once)...")
-# 'base' model is used instead of 'small' for significantly faster speed
-_global_whisper_model = whisper.load_model("base")
-
-def speech_to_text(audio_file):
+def speech_to_text(audio, sr_rate):
     try:
         print("🧠 Transcribing with Whisper...")
-        audio_file = os.path.abspath(audio_file)
-        
-        if not os.path.exists(audio_file):
-            return f"❌ Audio file not found: {audio_file}"
-        
-        # Load audio with librosa to avoid ffmpeg dependency
-        audio, sr = librosa.load(audio_file, sr=16000, mono=True)
-        
-        result = _global_whisper_model.transcribe(audio, language="en")
+        audio = np.asarray(audio).flatten().astype('float32')
+
+        if audio.size == 0:
+            return "❌ No audio to transcribe"
+
+        model = get_whisper_model()
+        # fp16=False suppresses warnings on CPU and prevents fallback overhead
+        result = model.transcribe(audio, language="en", fp16=False)
         text = result["text"]
-        
+
         if not text.strip():
             return "❌ Could not understand audio"
-        
+
         return text
 
     except Exception as e:
@@ -370,11 +378,12 @@ def speech_to_text(audio_file):
 
 # ── 5. INTONATION HEURISTIC ───────────────────────────────────────────────────
 
-def _ends_with_rising_pitch(audio_file):
+def _ends_with_rising_pitch(audio, sr_rate):
     """Checks if energy rises at the end — rough signal for a question."""
     try:
-        audio_file = os.path.abspath(audio_file)
-        y, sr_rate = librosa.load(audio_file, sr=None, mono=True)
+        y = np.asarray(audio).flatten()
+        if y.size == 0:
+            return False
         half = int(0.5 * sr_rate)
         if len(y) < 2 * half:
             return False
@@ -392,7 +401,7 @@ def save_to_json(sentences, raw_text, filename=None):
         filename = os.path.abspath("nlp_log.json")
     else:
         filename = os.path.abspath(filename)
-    
+
     record = {
         "raw_text": raw_text,
         "sentences": sentences,
@@ -415,36 +424,41 @@ def save_to_json(sentences, raw_text, filename=None):
 
 # ── 7. FULL PIPELINE ──────────────────────────────────────────────────────────
 
-def push_to_talk_pipeline():
+def push_to_talk_pipeline(trigger_event=None, mouth_active_event=None):
+    start_time = time.perf_counter()
+
     # Set working directory to script location for consistency
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
-    
+
     # Step 1: Record
-    raw_file = record_audio()
+    raw_audio, raw_sr = record_audio(trigger_event, mouth_active_event)
 
     # Step 2: Clean audio
-    clean_file = clean_audio(raw_file)
+    clean_audio_arr, clean_sr = clean_audio(raw_audio, raw_sr)
 
     # Step 3: Speech → text
-    raw_text = speech_to_text(clean_file)
+    raw_text = speech_to_text(clean_audio_arr, clean_sr)
 
     # Step 4: Show raw output
     print("\n" + "=" * 40)
     print("🧠 RAW TEXT:")
     print(raw_text)
 
-    rising = _ends_with_rising_pitch(clean_file)
+    rising = _ends_with_rising_pitch(clean_audio_arr, clean_sr)
     if rising:
         print("📈 (Intonation hint: rising energy detected at end)")
     print("=" * 40)
 
     if not raw_text or "❌" in raw_text:
         print("⚠️ Ignored invalid or unclear audio (not saved).")
+        elapsed = time.perf_counter() - start_time
+        print(f"⏱️ Run time: {elapsed:.2f} seconds")
         return []
 
     # Step 5: Split into sentences + detect questions
-    sentences = clean_text(raw_text) 
+    sentences = clean_text(raw_text)
+
     print("\n✨ DETECTED SENTENCES:")
     for i, item in enumerate(sentences, 1):
         label = "❓ QUESTION" if item["is_question"] else "💬 Statement"
@@ -457,6 +471,8 @@ def push_to_talk_pipeline():
     else:
         print("⚠️ Nothing to save.")
 
+    elapsed = time.perf_counter() - start_time
+    print(f"⏱️ Total run time: {elapsed:.2f} seconds")
     return sentences
 
 
