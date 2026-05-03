@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClassMind AI — Smart Classroom Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/smart-classroom-assistant.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+<div id="app">
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/AIU-logo.png" alt="Al Alamein International University">
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <div class="nav-item active" onclick="navigate('dashboard')">
+        <span class="nav-icon">⊞</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="navigate('vision')">
+        <span class="nav-icon">👁</span> Vision Feed
+        <span class="nav-badge green">Live</span>
+      </div>
+
+      <div class="nav-section-label" style="margin-top:8px;">Modules</div>
+      <div class="nav-item" onclick="navigate('attendance')">
+        <span class="nav-icon">✓</span> Attendance
+      </div>
+      <div class="nav-item" onclick="navigate('speech')">
+        <span class="nav-icon">🎙</span> Speech & NLP
+      </div>
+      <div class="nav-item" onclick="navigate('analytics')">
+        <span class="nav-icon">📊</span> Analytics
+      </div>
+
+      <div class="nav-section-label" style="margin-top:8px;">System</div>
+      <div class="nav-item" onclick="navigate('settings')">
+        <span class="nav-icon">⚙</span> Settings
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="topbar-title">Smart Classroom <span>Assistant</span></div>
+      <button class="theme-toggle-btn" onclick="toggleTheme()" id="theme-btn" title="Toggle dark/light mode">🌙</button>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <div id="page-dashboard" class="page active">
+        <div class="section-header">
+          <div class="section-title">Dashboard</div>
+          <div class="section-subtitle"><span style="color:var(--accent2)" id="dash-date"></span></div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card blue">
+            <div class="stat-icon">👥</div>
+            <div class="stat-label">Students Present</div>
+            <div class="stat-value blue" id="stat-present">—</div>
+            <div class="stat-delta" id="stat-present-sub">No session data yet</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-icon">😊</div>
+            <div class="stat-label">Avg Mood Score</div>
+            <div class="stat-value green" id="stat-mood">—</div>
+            <div class="stat-delta" id="stat-mood-sub">No mood data yet</div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-icon">🎙</div>
+            <div class="stat-label">Questions Asked</div>
+            <div class="stat-value purple" id="stat-questions">—</div>
+            <div class="stat-delta" id="stat-questions-sub">No questions yet</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-icon">🧠</div>
+            <div class="stat-label">Top Topic</div>
+            <div class="stat-value yellow" id="stat-top-topic" style="font-size:20px;padding-top:6px">—</div>
+            <div class="stat-delta" id="stat-top-topic-sub">No questions yet</div>
+          </div>
+        </div>
+
+        <div class="grid-2-1" style="margin-bottom:16px;">
+          <!-- Attendance summary -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recent Attendance Log</div>
+              <div class="card-badge green">Auto-updated</div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Status</th>
+                    <th>Mood</th>
+                    <th>Time In</th>
+                  </tr>
+                </thead>
+                <tbody id="dash-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Mood Distribution -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Mood Distribution</div>
+              <div class="card-badge purple">Live</div>
+            </div>
+            <div class="mood-ring-wrap">
+              <div class="mood-donut">
+                <svg id="mood-donut-svg" width="140" height="140" viewBox="0 0 140 140">
+                  <circle cx="70" cy="70" r="54" fill="none" stroke="#1a2540" stroke-width="18"/>
+                </svg>
+                <div class="center-text">
+                  <div class="center-num" id="donut-count">—</div>
+                  <div class="center-label">students</div>
+                </div>
+              </div>
+              <div class="mood-legend" id="mood-donut-legend" style="width:160px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Recent questions -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Live Question Feed</div>
+              <div class="card-badge">NLP Classified</div>
+            </div>
+            <div id="question-feed"></div>
+          </div>
+
+          <!-- System activity -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Session Timeline</div>
+            </div>
+            <div class="timeline" id="session-timeline"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ VISION FEED ══ -->
+      <div id="page-vision" class="page">
+        <div class="section-header">
+          <div class="section-title">Vision Feed</div>
+        </div>
+        <div class="webcam-wrap">
+          <video id="webcam-video" autoplay playsinline muted></video>
+          <canvas id="webcam-canvas"></canvas>
+          <div class="cam-corner"><span class="live-dot"></span>LIVE</div>
+          <div id="webcam-status" class="webcam-status">Starting camera…</div>
+        </div>
+      </div>
+
+      <!-- ══ ATTENDANCE ══ -->
+      <div id="page-attendance" class="page">
+        <div class="section-header">
+          <div class="section-title">Attendance Register</div>
+          <div class="section-subtitle" id="attend-subtitle"></div>
+        </div>
+
+        <!-- Session Tabs -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <div class="session-tabs" id="session-tabs" style="margin-bottom:0;"></div>
+        </div>
+
+        <!-- Session Summary Bar -->
+        <div class="session-summary-bar" id="session-summary-bar"></div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" id="attend-card-title">Attendance</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" id="attend-badges"></div>
+          </div>
+          <div class="attend-toolbar">
+            <input type="text" id="attend-search" class="attend-search" placeholder="🔍  Search by name or ID…" oninput="renderAttendanceTable()">
+            <select id="attend-filter" class="attend-filter" onchange="renderAttendanceTable()">
+              <option value="">All Status</option>
+              <option value="Present">Present</option>
+              <option value="Late">Late</option>
+              <option value="Absent">Absent</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px">#</th>
+                  <th>Student</th>
+                  <th>Status</th>
+                  <th>Mood</th>
+                  <th>Time In</th>
+                </tr>
+              </thead>
+              <tbody id="attendance-table"></tbody>
+            </table>
+          </div>
+          <div class="export-row">
+            <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+            <button class="export-btn" onclick="exportPDF()">📄 PDF Report</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SPEECH & NLP ══ -->
+      <div id="page-speech" class="page">
+        <div class="section-header">
+          <div class="section-title">Speech & NLP Module</div>
+        </div>
+        <div class="grid-1-2">
+          <!-- Mic control -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="card">
+              <div class="card-header"><div class="card-title">Microphone Control</div></div>
+              <div class="mic-btn-wrap">
+                <button class="mic-btn" id="mic-btn" onclick="toggleMic()">🎙</button>
+                <div class="mic-status" id="mic-status">Click to listen</div>
+              </div>
+              <div class="speech-area" id="speech-area">
+                <div class="speech-label">Transcribed Text</div>
+                <div class="speech-text placeholder" id="speech-text">Waiting for speech input…</div>
+                <div class="waveform" id="waveform"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><div class="card-title">NLP Classification</div></div>
+              <div style="margin-bottom:10px;">
+                <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Detected Topic</div>
+                <div style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--accent)" id="nlp-topic">—</div>
+              </div>
+              <div class="confidence-row">
+                <div class="confidence-label">Confidence</div>
+                <div class="confidence-track"><div class="confidence-fill" id="conf-fill" style="width:0%"></div></div>
+                <div class="confidence-val" id="conf-val">—</div>
+              </div>
+              <div style="margin-top:14px;">
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Available Topics</div>
+                <div class="topic-chips">
+                  <div class="topic-chip chip-cv">Computer Vision</div>
+                  <div class="topic-chip chip-ml">Machine Learning</div>
+                  <div class="topic-chip chip-math">Mathematics</div>
+                  <div class="topic-chip chip-ds">Data Science</div>
+                  <div class="topic-chip chip-algo">Algorithms</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question log -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Question Log</div>
+            </div>
+            <div id="nlp-question-log"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ ANALYTICS ══ -->
+      <div id="page-analytics" class="page">
+        <div class="section-header">
+          <div class="section-title">Analytics</div>
+        </div>
+
+        <!-- Row 1: stat cards -->
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr);">
+          <div class="stat-card blue">
+            <div class="stat-icon">📅</div>
+            <div class="stat-label">Total Sessions</div>
+            <div class="stat-value blue" id="an-total-sessions">4</div>
+            <div class="stat-delta">Recorded this semester</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-icon">👥</div>
+            <div class="stat-label">Avg Attendance</div>
+            <div class="stat-value green" id="an-avg-att">—</div>
+            <div class="stat-delta">Across all sessions</div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-icon">❓</div>
+            <div class="stat-label">Total Questions</div>
+            <div class="stat-value purple" id="an-total-q">—</div>
+            <div class="stat-delta">All sessions combined</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-icon">🚫</div>
+            <div class="stat-label">Avg Absent Rate</div>
+            <div class="stat-value yellow" id="an-absent-rate">—</div>
+            <div class="stat-delta">Across all sessions</div>
+          </div>
+        </div>
+
+        <!-- Row 2: charts -->
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Questions by Topic</div><div class="card-badge">This Session</div></div>
+            <div class="bar-chart" id="topic-chart"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;" id="topic-labels"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Mood Trends — Past Sessions</div></div>
+            <div class="bar-chart" id="mood-chart"></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;">Average mood score (0–10) per session</div>
+          </div>
+        </div>
+
+        <!-- Row 3: attendance over time + most active -->
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Attendance Over Time</div></div>
+            <div class="bar-chart" id="attend-chart"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Most Active Students</div></div>
+            <div id="top-students"></div>
+          </div>
+        </div>
+
+        <!-- Row 4: session comparison table -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title">Session Comparison</div>
+            <div class="card-badge">All Sessions</div>
+          </div>
+          <div class="table-wrap">
+            <table id="session-comparison-table">
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Present</th>
+                  <th>Late</th>
+                  <th>Absent</th>
+                  <th>Attendance %</th>
+                </tr>
+              </thead>
+              <tbody id="session-comparison-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Row 5: per-student summary -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Student Attendance Summary</div>
+            <div class="card-badge purple">All Sessions</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Student</th>
+                  <th>Sessions Present</th>
+                  <th>Sessions Late</th>
+                  <th>Sessions Absent</th>
+                  <th>Attendance Rate</th>
+                </tr>
+              </thead>
+              <tbody id="student-summary-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ══ SETTINGS ══ -->
+      <div id="page-settings" class="page">
+        <div class="section-header">
+          <div class="section-title">Settings</div>
+          <div class="section-subtitle">System information and active configuration</div>
+        </div>
+        <div class="grid-2">
+          <div>
+            <!-- Computer Vision -->
+            <div class="card" style="margin-bottom:16px;">
+              <div class="settings-group">
+                <div class="settings-group-title">Computer Vision</div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Face Recognition Model</div><div class="setting-desc">InsightFace · buffalo_l (ArcFace R50)</div></div>
+                  <span class="card-badge green">Active</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Emotion Detection</div><div class="setting-desc">EmotiEffLib · EfficientNet-B0 (ONNX)</div></div>
+                  <span class="card-badge green">Active</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Recognition Threshold</div><div class="setting-desc">Minimum cosine similarity to confirm identity</div></div>
+                  <span class="card-badge">0.45</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Min Confirmed Frames</div><div class="setting-desc">Frames required before marking attendance</div></div>
+                  <span class="card-badge">6 frames</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Inference Device</div><div class="setting-desc">Hardware used for model execution</div></div>
+                  <span class="card-badge">CPU/GPU</span>
+                </div>
+              </div>
+            </div>
+            <!-- Speech -->
+            <div class="card">
+              <div class="settings-group">
+                <div class="settings-group-title">Speech Module</div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Transcription Engine</div><div class="setting-desc">OpenAI Whisper · tiny model</div></div>
+                  <span class="card-badge green">Active</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Language</div><div class="setting-desc">Speech recognition language</div></div>
+                  <span class="card-badge">English (US)</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Noise Filtering</div><div class="setting-desc">noisereduce · ambient noise suppression</div></div>
+                  <span class="card-badge green">Enabled</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <!-- NLP -->
+            <div class="card" style="margin-bottom:16px;">
+              <div class="settings-group">
+                <div class="settings-group-title">NLP Module</div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Classification Model</div><div class="setting-desc">DeBERTa-v3-large · zero-shot classification</div></div>
+                  <span class="card-badge green">Active</span>
+                </div>
+                <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+                  <div class="setting-info"><div class="setting-name">Detected Topics</div><div class="setting-desc">Subjects the model classifies questions into</div></div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+                    <span class="topic-chip chip-cv">Computer Vision</span>
+                    <span class="topic-chip chip-ml">Machine Learning</span>
+                    <span class="topic-chip chip-ml">NLP</span>
+                    <span class="topic-chip chip-math">Mathematics</span>
+                    <span class="topic-chip chip-ds">Data Science</span>
+                    <span class="topic-chip chip-ds">Databases</span>
+                    <span class="topic-chip chip-algo">Algorithms</span>
+                    <span class="topic-chip chip-algo">Computer Networks</span>
+                    <span class="topic-chip chip-algo">Operating Systems</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Output -->
+            <div class="card">
+              <div class="settings-group">
+                <div class="settings-group-title">Data & Logs</div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Attendance Log</div><div class="setting-desc">data/logs/attendance_log.csv</div></div>
+                  <span class="card-badge green">Auto-saved</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Session Log</div><div class="setting-desc">data/logs/session_log.jsonl</div></div>
+                  <span class="card-badge green">Auto-saved</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Questions Log</div><div class="setting-desc">data/logs/questions_log.jsonl</div></div>
+                  <span class="card-badge green">Auto-saved</span>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info"><div class="setting-name">Student Embeddings</div><div class="setting-desc">data/embeddings/student_embeddings.pkl</div></div>
+                  <span class="card-badge">Enrollment only</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+
+<script>
+// ══════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════
+const API_BASE = 'http://localhost:8000';
+
+// ══════════════════════════════════════
+//  LIVE DATA  (populated from API)
+// ══════════════════════════════════════
+let ROSTER   = [];
+let SESSIONS = [];
+let QUESTIONS = [];
+
+let currentSessionIdx = 0;
+
+// ══════════════════════════════════════
+//  API DATA LOADING
+// ══════════════════════════════════════
+
+async function loadDataFromAPI() {
+  try {
+    const [roster, sessions, questions] = await Promise.all([
+      fetch(`${API_BASE}/api/roster`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/sessions`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/questions`).then(r => r.json()).catch(() => []),
+    ]);
+    if (roster.length)    ROSTER    = roster;
+    if (sessions.length)  SESSIONS  = sessions;
+    if (questions.length) QUESTIONS = questions;
+  } catch (e) {
+    console.warn('API not reachable, using mock data:', e);
+  }
+}
+
+// ══════════════════════════════════════
+//  WEBCAM + WEBSOCKET DETECTION
+// ══════════════════════════════════════
+let _visionWS      = null;
+let _frameTimer    = null;
+let _webcamStarted = false;
+
+function initWebcam() {
+  if (_webcamStarted) return;   // already running
+  _webcamStarted = true;
+
+  const video  = document.getElementById('webcam-video');
+  const canvas = document.getElementById('webcam-canvas');
+  const status = document.getElementById('webcam-status');
+  if (!video || !canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width  = video.videoWidth  || canvas.offsetWidth;
+    canvas.height = video.videoHeight || canvas.offsetHeight;
+  }
+
+  // Animated corner-bracket fallback (shown when WS is offline)
+  let _animColor = 0, _animRaf = null;
+  function startCornerAnimation() {
+    if (_animRaf) cancelAnimationFrame(_animRaf);
+    const box = { x: 0.3, y: 0.2, w: 0.22, h: 0.38 };
+    function draw() {
+      resizeCanvas();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cx = box.x * canvas.width, cy = box.y * canvas.height;
+      const bw = box.w * canvas.width,  bh = box.h * canvas.height;
+      _animColor = (_animColor + 1) % 360;
+      const alpha = 0.7 + 0.3 * Math.sin(_animColor * Math.PI / 180);
+      const len = Math.min(bw, bh) * 0.22;
+      ctx.strokeStyle = `rgba(37,99,235,${alpha})`;
+      ctx.lineWidth = 2.5;
+      [[cx, cy, 1, 1],[cx+bw, cy, -1, 1],[cx, cy+bh, 1, -1],[cx+bw, cy+bh, -1, -1]]
+        .forEach(([x, y, dx, dy]) => {
+          ctx.beginPath(); ctx.moveTo(x+dx*len, y); ctx.lineTo(x, y); ctx.lineTo(x, y+dy*len); ctx.stroke();
+        });
+      _animRaf = requestAnimationFrame(draw);
+    }
+    draw();
+  }
+
+  // Draw real face detections from WS
+  function drawDetections(faces) {
+    if (_animRaf) { cancelAnimationFrame(_animRaf); _animRaf = null; }
+    resizeCanvas();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const sx = canvas.width  / (video.videoWidth  || 640);
+    const sy = canvas.height / (video.videoHeight || 480);
+    faces.forEach(face => {
+      const [x1, y1, x2, y2] = face.bbox;
+      const color = (face.status === 'present_marked' || face.status === 'present')
+        ? '#10b981' : (face.name === 'Unknown' ? '#f97316' : '#3b82f6');
+      const rx1 = x1*sx, ry1 = y1*sy, rw = (x2-x1)*sx, rh = (y2-y1)*sy;
+      const len = Math.min(rw, rh) * 0.22;
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+      [[rx1, ry1, 1, 1],[rx1+rw, ry1, -1, 1],[rx1, ry1+rh, 1, -1],[rx1+rw, ry1+rh, -1, -1]]
+        .forEach(([x, y, dx, dy]) => {
+          ctx.beginPath(); ctx.moveTo(x+dx*len, y); ctx.lineTo(x, y); ctx.lineTo(x, y+dy*len); ctx.stroke();
+        });
+      // Label
+      const label = `${face.name}  ${face.mood}`;
+      ctx.font = 'bold 12px DM Sans, sans-serif';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = color + 'cc';
+      ctx.fillRect(rx1, ry1 - 22, tw + 12, 20);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, rx1 + 6, ry1 - 6);
+    });
+  }
+
+  // Connect WebSocket to backend CV pipeline
+  function connectVisionWS() {
+    try {
+      _visionWS = new WebSocket(`${API_BASE.replace(/^http/, 'ws')}/ws/vision`);
+      _visionWS.onopen  = () => { if (status) status.textContent = 'Face detection active (live)'; };
+      _visionWS.onmessage = (ev) => { try { drawDetections(JSON.parse(ev.data).faces || []); } catch(_) {} };
+      _visionWS.onerror = () => startCornerAnimation();
+      _visionWS.onclose = () => { _visionWS = null; startCornerAnimation(); };
+    } catch (_) { startCornerAnimation(); }
+  }
+
+  // Send a JPEG frame to the backend every 200 ms (5 fps)
+  function startFrameSending() {
+    if (_frameTimer) clearInterval(_frameTimer);
+    _frameTimer = setInterval(() => {
+      if (!_visionWS || _visionWS.readyState !== WebSocket.OPEN) return;
+      const tmp = document.createElement('canvas');
+      tmp.width = video.videoWidth; tmp.height = video.videoHeight;
+      tmp.getContext('2d').drawImage(video, 0, 0);
+      tmp.toBlob(blob => {
+        if (blob && _visionWS && _visionWS.readyState === WebSocket.OPEN)
+          blob.arrayBuffer().then(buf => _visionWS.send(buf));
+      }, 'image/jpeg', 0.7);
+    }, 200);
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
+    .then(stream => {
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        resizeCanvas();
+        connectVisionWS();
+        startFrameSending();
+        startCornerAnimation(); // shown until WS sends first result
+      };
+    })
+    .catch(() => { if (status) status.textContent = 'Camera not available'; });
+}
+
+// ══════════════════════════════════════
+//  RENDER FUNCTIONS
+// ══════════════════════════════════════
+//  ANALYTICS RENDER
+// ══════════════════════════════════════
+function renderAnalytics() {
+  const total = SESSIONS.length;
+  const allRates = SESSIONS.map(s => {
+    const p = s.students.filter(x => x.status !== 'Absent').length;
+    return Math.round((p / s.students.length) * 100);
+  });
+  const avgAtt = Math.round(allRates.reduce((a,b)=>a+b,0) / total);
+  const absentRates = SESSIONS.map(s => {
+    const ab = s.students.filter(x => x.status === 'Absent').length;
+    return Math.round((ab / s.students.length) * 100);
+  });
+  const avgAbsent = Math.round(absentRates.reduce((a,b)=>a+b,0) / total);
+  const el = id => document.getElementById(id);
+  if(el('an-total-sessions')) el('an-total-sessions').textContent = total;
+  if(el('an-avg-att'))        el('an-avg-att').textContent = avgAtt + '%';
+  if(el('an-absent-rate'))    el('an-absent-rate').textContent = avgAbsent + '%';
+
+  // Session comparison table
+  const tbody = el('session-comparison-body');
+  if (tbody) {
+    tbody.innerHTML = SESSIONS.map(s => {
+      const present = s.students.filter(x => x.status === 'Present').length;
+      const late    = s.students.filter(x => x.status === 'Late').length;
+      const absent  = s.students.filter(x => x.status === 'Absent').length;
+      const rate    = Math.round(((present + late) / s.students.length) * 100);
+      return `<tr>
+        <td style="font-weight:600;color:var(--accent)">${s.label}</td>
+        <td>${s.date}</td>
+        <td style="color:var(--muted2)">${s.time}</td>
+        <td><span class="badge badge-present">${present}</span></td>
+        <td><span class="badge badge-late">${late}</span></td>
+        <td><span class="badge badge-absent">${absent}</span></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;">
+              <div style="width:${rate}%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;"></div>
+            </div>
+            <span style="font-weight:600;color:var(--accent);min-width:34px">${rate}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Per-student summary
+  const sbody = el('student-summary-body');
+  if (sbody) {
+    sbody.innerHTML = ROSTER.map((r, i) => {
+      let present = 0, late = 0, absent = 0;
+      SESSIONS.forEach(s => {
+        const rec = s.students.find(x => x.name === r.name);
+        if (!rec) return;
+        if (rec.status === 'Present') present++;
+        else if (rec.status === 'Late') late++;
+        else absent++;
+      });
+      const rate = Math.round(((present + late) / SESSIONS.length) * 100);
+      const rateColor = rate >= 80 ? 'var(--green)' : rate >= 60 ? 'var(--yellow)' : 'var(--red)';
+      return `<tr>
+        <td style="color:var(--muted)">${i+1}</td>
+        <td><div class="student-cell">
+          <div class="avatar ${r.ac}">${r.avatar}</div>
+          <div><div class="student-name">${r.name}</div></div>
+        </div></td>
+        <td style="color:var(--green);font-weight:600;text-align:center">${present}</td>
+        <td style="color:var(--yellow);font-weight:600;text-align:center">${late}</td>
+        <td style="color:var(--red);font-weight:600;text-align:center">${absent}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:5px;background:var(--surface3);border-radius:3px;overflow:hidden;">
+              <div style="width:${rate}%;height:100%;background:${rateColor};border-radius:3px;"></div>
+            </div>
+            <span style="font-weight:600;color:${rateColor};min-width:34px">${rate}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ══════════════════════════════════════
+function renderDashTable() {
+  const tb = document.getElementById('dash-table');
+  if(!tb) return;
+  const students = SESSIONS.length ? SESSIONS[currentSessionIdx].students : [];
+  if (!students.length) { tb.innerHTML=`<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">No attendance data yet</td></tr>`; return; }
+  tb.innerHTML = students.slice(0,6).map(s => `
+    <tr>
+      <td><div class="student-cell"><div class="avatar ${s.ac}">${s.avatar}</div><div><div class="student-name">${s.name}</div></div></div></td>
+      <td><span class="badge badge-${s.status.toLowerCase()}">${s.status}</span></td>
+      <td><span class="mood-badge">${s.mood}</span></td>
+      <td style="color:var(--muted2)">${s.time}</td>
+    </tr>`).join('');
+}
+
+function renderSessionTabs() {
+  const el = document.getElementById('session-tabs');
+  if (!el) return;
+  el.innerHTML = SESSIONS.map((s, i) => `
+    <button class="session-tab ${i === currentSessionIdx ? 'active' : ''}" onclick="switchSession(${i})">
+      <span class="session-tab-label">${s.label}</span>
+      <span class="session-tab-date">${s.date}</span>
+    </button>`).join('');
+}
+
+function renderSessionSummary() {
+  const el = document.getElementById('session-summary-bar');
+  if (!el) return;
+  const s = SESSIONS[currentSessionIdx];
+  const total   = s.students.length;
+  const present = s.students.filter(x => x.status === 'Present').length;
+  const late    = s.students.filter(x => x.status === 'Late').length;
+  const absent  = s.students.filter(x => x.status === 'Absent').length;
+  const rate    = Math.round(((present + late) / total) * 100);
+
+  el.innerHTML = `
+    <div class="summary-stat"><span class="summary-num" style="color:var(--accent)">${total}</span><span class="summary-lbl">Enrolled</span></div>
+    <div class="summary-divider"></div>
+    <div class="summary-stat"><span class="summary-num" style="color:var(--green)">${present}</span><span class="summary-lbl">Present</span></div>
+    <div class="summary-stat"><span class="summary-num" style="color:var(--yellow)">${late}</span><span class="summary-lbl">Late</span></div>
+    <div class="summary-stat"><span class="summary-num" style="color:var(--red)">${absent}</span><span class="summary-lbl">Absent</span></div>
+    <div class="summary-divider"></div>
+    <div class="summary-stat"><span class="summary-num" style="color:var(--accent3)">${rate}%</span><span class="summary-lbl">Attendance Rate</span></div>
+    <div class="summary-stat"><span class="summary-num" style="color:var(--muted2);font-size:13px">${s.time}</span><span class="summary-lbl">Time Slot</span></div>`;
+}
+
+function renderAttendanceBadges() {
+  const s = SESSIONS[currentSessionIdx];
+  const present = s.students.filter(x => x.status === 'Present').length;
+  const late    = s.students.filter(x => x.status === 'Late').length;
+  const absent  = s.students.filter(x => x.status === 'Absent').length;
+  const badges  = document.getElementById('attend-badges');
+  const title   = document.getElementById('attend-card-title');
+  if (badges) badges.innerHTML = `
+    <div class="card-badge green">${present} Present</div>
+    <div class="card-badge yellow">${late} Late</div>
+    <div class="card-badge" style="background:rgba(220,38,38,0.1);color:var(--red);border-color:rgba(220,38,38,0.3)">${absent} Absent</div>`;
+  if (title) title.textContent = `Attendance · ${s.date}`;
+  const sub = document.getElementById('attend-subtitle');
+  if (sub) sub.textContent = `${s.label}  ·  ${s.date}  ·  ${s.time}`;
+}
+
+function switchSession(idx) {
+  currentSessionIdx = idx;
+  renderSessionTabs();
+  renderSessionSummary();
+  renderAttendanceBadges();
+  renderAttendanceTable();
+  updateDashStats();
+}
+
+function cycleStatus(sessionIdx, studentIdx) {
+  const cycle = ['Present', 'Late', 'Absent'];
+  const s = SESSIONS[sessionIdx].students[studentIdx];
+  s.status = cycle[(cycle.indexOf(s.status) + 1) % cycle.length];
+  if (s.status === 'Absent') { s.time = '—'; }
+  else if (s.status === 'Present' && s.time === '—') s.time = '09:00';
+  renderAttendanceBadges();
+  renderSessionSummary();
+  renderAttendanceTable();
+}
+
+function renderAttendanceTable() {
+  const tb = document.getElementById('attendance-table');
+  if (!tb) return;
+  const search = (document.getElementById('attend-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('attend-filter')?.value || '';
+  const students = SESSIONS[currentSessionIdx].students;
+  let filtered = students.map((s, i) => ({ ...s, _idx: i }));
+  if (search) filtered = filtered.filter(s => s.name.toLowerCase().includes(search));
+  if (filter) filtered = filtered.filter(s => s.status === filter);
+  if (!filtered.length) {
+    tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">No students match the filter.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = filtered.map((s, i) => `
+    <tr>
+      <td style="color:var(--muted)">${i + 1}</td>
+      <td><div class="student-cell"><div class="avatar ${s.ac}">${s.avatar}</div><div><div class="student-name">${s.name}</div></div></div></td>
+      <td><span class="badge badge-${s.status.toLowerCase()} status-clickable" onclick="cycleStatus(${currentSessionIdx},${s._idx})" title="Click to change status">${s.status}</span></td>
+      <td><span class="mood-badge">${s.mood}</span></td>
+      <td style="color:var(--muted2)">${s.time}</td>
+    </tr>`).join('');
+}
+
+function renderQuestionFeed() {
+  const el = document.getElementById('question-feed');
+  if(!el) return;
+  el.innerHTML = QUESTIONS.slice(0,5).map(q => `
+    <div class="q-item">
+      <div class="q-avatar avatar ${q.ac}">${q.avatar}</div>
+      <div class="q-content">
+        <div class="q-meta">
+          <span class="q-name">${q.student}</span>
+          <span class="q-time">${q.time}</span>
+          <span class="topic-chip ${q.topicClass}" style="padding:2px 8px;font-size:10.5px">${q.topic}</span>
+        </div>
+        <div class="q-text">${q.q}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderTimeline() {
+  const el = document.getElementById('session-timeline');
+  if (!el) return;
+  if (!SESSIONS.length && !QUESTIONS.length) { _noData(el, 'No session activity yet'); return; }
+
+  const events = [];
+  const s = SESSIONS[0];
+  if (s) {
+    events.push({ time: s.time.split('–')[0]?.trim()||'—', text:`<strong>Session recorded</strong> · ${s.date}`, color:'' });
+    s.students.filter(x=>x.status==='Present').slice(0,2).forEach(st =>
+      events.push({ time:st.time, text:`<strong>${st.name}</strong> marked Present`, color:'green' })
+    );
+    s.students.filter(x=>x.status==='Late').slice(0,1).forEach(st =>
+      events.push({ time:st.time, text:`<strong>Late arrival</strong> · ${st.name}`, color:'' })
+    );
+  }
+  QUESTIONS.slice(0,3).forEach(q =>
+    events.push({ time:q.time, text:`<strong>NLP classified:</strong> ${q.topic} — "${q.q.substring(0,40)}…"`, color:'purple' })
+  );
+
+  el.innerHTML = events.length
+    ? events.map(e=>`
+        <div class="tl-item">
+          <div class="tl-dot ${e.color}"></div>
+          <div class="tl-time">${e.time}</div>
+          <div class="tl-text">${e.text}</div>
+        </div>`).join('')
+    : `<div style="color:var(--muted);font-size:12px;padding:16px">No events yet</div>`;
+}
+
+
+function renderNLPQuestions() {
+  const el = document.getElementById('nlp-question-log');
+  if(!el) return;
+  el.innerHTML = QUESTIONS.map(q => `
+    <div class="q-item">
+      <div class="q-avatar avatar ${q.ac}">${q.avatar}</div>
+      <div class="q-content">
+        <div class="q-meta">
+          <span class="q-name">${q.student}</span>
+          <span class="q-time">${q.time}</span>
+        </div>
+        <div class="q-text">${q.q}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <span class="topic-chip ${q.topicClass}" style="padding:2px 8px;font-size:10.5px">${q.topic}</span>
+          <span style="font-size:10.5px;color:var(--muted)">Confidence: <strong style="color:var(--accent)">${q.conf}%</strong></span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ── helpers ──────────────────────────────────────────────
+const _MOOD_SCORE = { happy:9, focused:8, neutral:5, surprised:6, tired:3, sad:2, angry:1, unknown:5 };
+const _TOPIC_BAR  = { 'Computer Vision':'', 'Machine Learning':'purple-bar', 'Mathematics':'green-bar', 'Data Science':'cyan-bar', 'Algorithms':'yellow-bar', 'Natural Language Processing':'purple-bar', 'Databases':'cyan-bar', 'Computer Networks':'yellow-bar', 'Operating Systems':'yellow-bar' };
+
+function _moodKey(moodStr) {
+  return (moodStr || '').toLowerCase().replace(/[^a-z]/g,'').match(/happy|focused|neutral|tired|sad|angry|surprised/)?.[0] || 'unknown';
+}
+
+function _noData(el, msg='No data yet') {
+  if(el) el.innerHTML = `<div style="color:var(--muted);font-size:12px;text-align:center;padding:24px">${msg}</div>`;
+}
+
+// ── dashboard stat cards ──────────────────────────────────
+function updateDashStats() {
+  const s = SESSIONS.length ? SESSIONS[currentSessionIdx] : null;
+  const students = s ? s.students : [];
+  const present  = students.filter(x => x.status !== 'Absent').length;
+  const enrolled = students.length;
+  const rate     = enrolled ? Math.round(present/enrolled*100) : 0;
+
+  const _id = id => document.getElementById(id);
+  if(_id('stat-present'))     _id('stat-present').textContent     = enrolled ? present : '—';
+  if(_id('stat-present-sub')) _id('stat-present-sub').textContent = enrolled ? `of ${enrolled} enrolled · ${rate}%` : 'No session data yet';
+
+  // Mood score from last session
+  if (students.length) {
+    const scores = students.map(x => _MOOD_SCORE[_moodKey(x.mood)] || 5);
+    const avg = (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1);
+    if(_id('stat-mood'))     _id('stat-mood').textContent     = avg;
+    if(_id('stat-mood-sub')) _id('stat-mood-sub').textContent = 'Avg mood this session';
+  } else {
+    if(_id('stat-mood'))     _id('stat-mood').textContent     = '—';
+    if(_id('stat-mood-sub')) _id('stat-mood-sub').textContent = 'No mood data yet';
+  }
+
+  if(_id('stat-questions'))     _id('stat-questions').textContent     = QUESTIONS.length || '—';
+  if(_id('stat-questions-sub')) _id('stat-questions-sub').textContent = QUESTIONS.length ? `${QUESTIONS.length} recorded this session` : 'No questions yet';
+
+  // Top topic
+  const counts = {};
+  QUESTIONS.forEach(q => { counts[q.topic] = (counts[q.topic]||0)+1; });
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  if(_id('stat-top-topic'))     _id('stat-top-topic').textContent     = top ? top[0].split(' ')[0] : '—';
+  if(_id('stat-top-topic-sub')) _id('stat-top-topic-sub').textContent = top ? `${top[0]} · ${top[1]} question${top[1]!==1?'s':''}` : 'No questions yet';
+
+  // Mood donut center + segments
+  if(_id('donut-count')) _id('donut-count').textContent = enrolled || '—';
+  renderMoodDonut();
+}
+
+// ── Mood Donut (Dashboard) ────────────────────────────────
+const _MOOD_CONFIG = [
+  { key:'happy',     label:'Happy',     color:'#10b981' },
+  { key:'neutral',   label:'Neutral',   color:'#8b5cf6' },
+  { key:'tired',     label:'Tired',     color:'#f59e0b' },
+  { key:'sad',       label:'Sad',       color:'#6b7280' },
+  { key:'angry',     label:'Angry',     color:'#ef4444' },
+  { key:'surprised', label:'Surprised', color:'#3b82f6' },
+];
+
+function renderMoodDonut() {
+  const svg    = document.getElementById('mood-donut-svg');
+  const legend = document.getElementById('mood-donut-legend');
+  if (!svg || !legend) return;
+
+  const students = SESSIONS.length ? SESSIONS[currentSessionIdx].students : [];
+
+  if (!students.length) {
+    // Remove all dynamic circles, show empty legend
+    svg.querySelectorAll('.mood-seg').forEach(el => el.remove());
+    legend.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:8px 0">No mood data yet</div>';
+    return;
+  }
+
+  // Count moods
+  const counts = {};
+  students.forEach(s => {
+    const k = _moodKey(s.mood);
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  const total = students.length;
+  const CIRC  = 2 * Math.PI * 54; // ≈ 339.3
+
+  // Build segments in order, skip moods with 0 count
+  const segments = _MOOD_CONFIG.filter(m => counts[m.key]);
+  let offset = 0;
+
+  // Remove old dynamic segments
+  svg.querySelectorAll('.mood-seg').forEach(el => el.remove());
+
+  segments.forEach(m => {
+    const pct = counts[m.key] / total;
+    const arc = pct * CIRC;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('class', 'mood-seg');
+    circle.setAttribute('cx', '70'); circle.setAttribute('cy', '70'); circle.setAttribute('r', '54');
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', m.color);
+    circle.setAttribute('stroke-width', '18');
+    circle.setAttribute('stroke-dasharray', `${arc.toFixed(1)} ${CIRC.toFixed(1)}`);
+    circle.setAttribute('stroke-dashoffset', (-offset).toFixed(1));
+    svg.appendChild(circle);
+    offset += arc;
+  });
+
+  // Legend
+  legend.innerHTML = segments.map(m => {
+    const pct = Math.round((counts[m.key] / total) * 100);
+    return `<div class="legend-item">
+      <div class="legend-left">
+        <div class="legend-dot" style="background:${m.color}"></div>
+        <div class="legend-name">${m.label}</div>
+      </div>
+      <div class="legend-val" style="color:${m.color}">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+let _apexTopic = null, _apexMood = null, _apexAttend = null;
+
+function _apexDefaults() {
+  const dark = document.body.classList.contains('dark-mode');
+  const textColor  = dark ? '#94a3b8' : '#1e293b';
+  const gridColor  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
+  return {
+    chart: { background: 'transparent', toolbar: { show: false }, fontFamily: 'DM Sans, sans-serif', foreColor: textColor },
+    theme: { mode: dark ? 'dark' : 'light' },
+    grid: { borderColor: gridColor, strokeDashArray: 4 },
+    tooltip: { theme: dark ? 'dark' : 'light' },
+    xaxis: { labels: { style: { colors: textColor } } },
+    yaxis: { labels: { style: { colors: textColor } } },
+  };
+}
+
+function renderTopicChart() {
+  const el = document.getElementById('topic-chart');
+  if (!el) return;
+  if (!QUESTIONS.length) { _noData(el, 'No questions recorded yet'); return; }
+
+  const counts = {};
+  QUESTIONS.forEach(q => { counts[q.topic] = (counts[q.topic]||0)+1; });
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+
+  if (_apexTopic) { _apexTopic.destroy(); _apexTopic = null; }
+  el.innerHTML = '';
+  _apexTopic = new ApexCharts(el, {
+    ..._apexDefaults(),
+    chart: { ..._apexDefaults().chart, type: 'bar', height: 220 },
+    series: [{ name: 'Questions', data: sorted.map(x => x[1]) }],
+    xaxis: { categories: sorted.map(x => x[0].split(' ')[0]), labels: { style: { fontSize: '11px' } } },
+    yaxis: { labels: { formatter: v => Math.round(v) } },
+    colors: ['#6366f1'],
+    plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
+    dataLabels: { enabled: true, style: { fontSize: '11px' } },
+  });
+  _apexTopic.render();
+}
+
+function renderMoodChart() {
+  const el = document.getElementById('mood-chart');
+  if (!el) return;
+  if (!SESSIONS.length) { _noData(el, 'No sessions recorded yet'); return; }
+
+  const data = SESSIONS.map((s, i) => {
+    const scores = s.students.map(st => _MOOD_SCORE[_moodKey(st.mood)] || 5);
+    return { label: `S${i+1}`, val: +(scores.reduce((a,b)=>a+b,0)/Math.max(1,scores.length)).toFixed(1) };
+  });
+
+  if (_apexMood) { _apexMood.destroy(); _apexMood = null; }
+  el.innerHTML = '';
+  _apexMood = new ApexCharts(el, {
+    ..._apexDefaults(),
+    chart: { ..._apexDefaults().chart, type: 'area', height: 220 },
+    series: [{ name: 'Mood Score', data: data.map(d => d.val) }],
+    xaxis: { categories: data.map(d => d.label), labels: { style: { fontSize: '11px' } } },
+    yaxis: { min: 0, max: 10, labels: { formatter: v => v.toFixed(1) } },
+    colors: ['#10b981'],
+    stroke: { curve: 'smooth', width: 2 },
+    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02 } },
+    dataLabels: { enabled: false },
+    markers: { size: 4 },
+  });
+  _apexMood.render();
+}
+
+function renderAttendChart() {
+  const el = document.getElementById('attend-chart');
+  if (!el) return;
+  if (!SESSIONS.length) { _noData(el, 'No sessions recorded yet'); return; }
+
+  const rates = SESSIONS.map(s =>
+    Math.round((s.students.filter(x=>x.status!=='Absent').length / Math.max(1,s.students.length))*100)
+  );
+
+  if (_apexAttend) { _apexAttend.destroy(); _apexAttend = null; }
+  el.innerHTML = '';
+  _apexAttend = new ApexCharts(el, {
+    ..._apexDefaults(),
+    chart: { ..._apexDefaults().chart, type: 'line', height: 220 },
+    series: [{ name: 'Attendance %', data: rates }],
+    xaxis: { categories: SESSIONS.map((_,i) => `S${i+1}`), labels: { style: { fontSize: '11px' } } },
+    yaxis: { min: 0, max: 100, labels: { formatter: v => v+'%' } },
+    colors: ['#38bdf8'],
+    stroke: { curve: 'smooth', width: 3 },
+    markers: { size: 5 },
+    dataLabels: { enabled: false },
+    annotations: { yaxis: [{ y: 75, borderColor: '#f59e0b', label: { text: '75% target', style: { fontSize: '11px' } } }] },
+  });
+  _apexAttend.render();
+}
+
+function renderTopStudents() {
+  const el = document.getElementById('top-students');
+  if (!el) return;
+  if (!QUESTIONS.length) { _noData(el, 'No questions recorded yet'); return; }
+
+  const map = {};
+  QUESTIONS.forEach(q => {
+    if (!map[q.student]) map[q.student] = { name:q.student, avatar:q.avatar, ac:q.ac, q:0 };
+    map[q.student].q++;
+  });
+  const top = Object.values(map).sort((a,b)=>b.q-a.q).slice(0,5);
+
+  el.innerHTML = top.map((s,i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(99,179,237,0.06)">
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--muted);width:22px;text-align:center">${i+1}</div>
+      <div class="avatar ${s.ac}" style="width:30px;height:30px;font-size:11px">${s.avatar}</div>
+      <div style="flex:1;font-size:13px;font-weight:500">${s.name}</div>
+      <div style="font-size:12px;color:var(--accent);font-weight:600">${s.q} question${s.q!==1?'s':''}</div>
+    </div>`).join('');
+}
+
+
+function renderWaveform() {
+  const wf = document.getElementById('waveform');
+  if(!wf) return;
+  wf.innerHTML = Array.from({length:18}, (_,i) =>
+    `<div class="wave-bar" style="height:${8+Math.random()*20}px;animation-delay:${i*0.07}s"></div>`).join('');
+}
+
+// ══════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════
+let _currentPage = 'dashboard';
+function navigate(page) {
+  _currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const el = document.getElementById('page-' + page);
+  if(el) el.classList.add('active');
+  const titles = {
+    dashboard:'Dashboard',
+    vision:'Vision Feed',
+    attendance:'Attendance',
+    speech:'Speech & NLP',
+    analytics:'Analytics',
+    settings:'Settings'
+  };
+  const topbar = document.querySelector('.topbar-title');
+  if(topbar) topbar.innerHTML = `Smart Classroom <span>${titles[page] || page}</span>`;
+
+  // activate correct nav item
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if(n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) {
+      n.classList.add('active');
+    }
+  });
+
+  // lazy render
+  if(page==='dashboard') { updateDashStats(); renderDashTable(); renderQuestionFeed(); renderTimeline(); }
+  if(page==='vision')    { initWebcam(); }
+  if(page==='speech')    { renderNLPQuestions(); renderWaveform(); }
+  if(page==='analytics') { renderTopicChart(); renderMoodChart(); renderAttendChart(); renderTopStudents(); }
+}
+
+// ══════════════════════════════════════
+//  MIC — Web Speech API + /api/classify
+// ══════════════════════════════════════
+let micActive = false;
+let _recognition = null;
+let qIdx = 0;
+
+// Simulated questions used as fallback when browser has no SpeechRecognition
+const sampleQuestions = [
+  { q:"Can you explain how pooling layers reduce dimensionality?", topic:"Computer Vision", conf:96 },
+  { q:"What is the vanishing gradient problem?", topic:"Machine Learning", conf:89 },
+  { q:"How do we compute eigenvalues of a matrix?", topic:"Mathematics", conf:92 },
+  { q:"What's the difference between bagging and boosting?", topic:"Data Science", conf:87 },
+  { q:"What is the time complexity of quicksort in the worst case?", topic:"Algorithms", conf:94 },
+];
+
+function _setMicUI(active) {
+  const btn    = document.getElementById('mic-btn');
+  const status = document.getElementById('mic-status');
+  const area   = document.getElementById('speech-area');
+  const bars   = document.querySelectorAll('.wave-bar');
+  if (active) {
+    btn?.classList.add('listening');
+    if (status) status.textContent = 'Listening… speak now';
+    area?.classList.add('listening');
+    bars.forEach(b => b.classList.add('active'));
+  } else {
+    btn?.classList.remove('listening');
+    if (status) status.textContent = 'Click to listen';
+    area?.classList.remove('listening');
+    bars.forEach(b => b.classList.remove('active'));
+  }
+}
+
+async function _classifyAndDisplay(transcript, fallbackTopic = null, fallbackConf = null) {
+  const textEl = document.getElementById('speech-text');
+  if (textEl) { textEl.textContent = transcript; textEl.classList.remove('placeholder'); }
+
+  toast('🧠 Classifying… (NLP model may take a moment on first run)', 'info');
+
+  try {
+    // 60-second timeout — DeBERTa can be slow on first load
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 60000);
+
+    const res  = await fetch(`${API_BASE}/api/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: transcript, student: 'Student' }),
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => `HTTP ${res.status}`);
+      console.error('Classify HTTP error:', errText);
+      throw new Error(`Server error ${res.status}`);
+    }
+    const data = await res.json();
+    document.getElementById('nlp-topic').textContent = data.topic;
+    document.getElementById('conf-fill').style.width = data.confidence + '%';
+    document.getElementById('conf-val').textContent  = data.confidence + '%';
+    toast(`🧠 Classified: ${data.topic} · ${data.confidence}% confidence`, 'success');
+
+    // Refresh question log from server
+    fetch(`${API_BASE}/api/questions`).then(r => r.json()).then(qs => {
+      if (qs.length) { QUESTIONS = qs; renderNLPQuestions(); renderQuestionFeed(); }
+    }).catch(() => {});
+
+  } catch (err) {
+    console.error('Classify error:', err);
+    const msg = err.name === 'AbortError'
+      ? '⏱ NLP model still loading — try again in a moment'
+      : `⚠ Classify failed: ${err.message}`;
+    toast(msg, 'warn');
+    // Always show fallback result so the UI doesn't stay blank
+    if (fallbackTopic) {
+      document.getElementById('nlp-topic').textContent = fallbackTopic;
+      document.getElementById('conf-fill').style.width = (fallbackConf || 85) + '%';
+      document.getElementById('conf-val').textContent  = (fallbackConf || 85) + '%';
+    }
+  }
+}
+
+function _runSimulatedMic() {
+  const sample = sampleQuestions[qIdx % sampleQuestions.length];
+  qIdx++;
+  setTimeout(async () => {
+    await _classifyAndDisplay(sample.q, sample.topic, sample.conf);
+    micActive = false;
+    _setMicUI(false);
+  }, 2200);
+}
+
+function toggleMic() {
+  if (micActive) {
+    // stop
+    micActive = false;
+    _setMicUI(false);
+    if (_recognition) { try { _recognition.stop(); } catch(_) {} _recognition = null; }
+    return;
+  }
+
+  micActive = true;
+  _setMicUI(true);
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    _runSimulatedMic();
+    return;
+  }
+
+  _recognition = new SpeechRecognition();
+  _recognition.lang = 'en-US';
+  _recognition.interimResults = false;
+  _recognition.maxAlternatives = 1;
+
+  _recognition.onresult = async (event) => {
+    const transcript = event.results[0][0].transcript;
+    await _classifyAndDisplay(transcript);
+    micActive = false;
+    _setMicUI(false);
+    _recognition = null;
+  };
+  _recognition.onerror = () => { micActive = false; _setMicUI(false); _recognition = null; };
+  _recognition.onend   = () => { micActive = false; _setMicUI(false); _recognition = null; };
+  _recognition.start();
+}
+
+
+// ══════════════════════════════════════
+//  TOAST NOTIFICATIONS
+// ══════════════════════════════════════
+function toast(msg, type = 'info') {
+  const container = (() => {
+    let el = document.getElementById('_toast-container');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_toast-container';
+      el.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:9999';
+      document.body.appendChild(el);
+    }
+    return el;
+  })();
+
+  const colors = { success: '#10b981', warn: '#f59e0b', info: '#3b82f6', error: '#ef4444' };
+  const t = document.createElement('div');
+  t.style.cssText = `
+    background:var(--surface2,#1e2a3a);border:1px solid ${colors[type] || colors.info}55;
+    color:var(--text,#e2e8f0);padding:10px 16px;border-radius:10px;font-size:13px;
+    box-shadow:0 4px 16px #0006;max-width:340px;opacity:0;transition:opacity .25s;
+    border-left:3px solid ${colors[type] || colors.info};
+  `;
+  t.textContent = msg;
+  container.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => {
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 300);
+  }, 3500);
+}
+
+// ── SIDEBAR COLLAPSE ──
+
+// ── DARK / LIGHT MODE ──
+function toggleTheme() {
+  document.body.classList.toggle('dark-mode');
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+  if (_currentPage === 'analytics') { renderTopicChart(); renderMoodChart(); renderAttendChart(); }
+}
+
+
+
+// ══════════════════════════════════════
+//  EXPORT FUNCTIONS
+// ══════════════════════════════════════
+function exportCSV() {
+  const session = SESSIONS[currentSessionIdx];
+  const headers = ['#', 'Name', 'Status', 'Mood', 'Time In'];
+  const rows = session.students.map((s, i) => [
+    i + 1,
+    s.name,
+    s.status,
+    s.mood.replace(/[^\x20-\x7E]/g, '').trim(),
+    s.time,
+  ]);
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const sess = SESSIONS[currentSessionIdx];
+  a.download = `attendance_${sess.label.replace(' ','')}_${sess.date.slice(-11).replace(/ /g,'-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('📥 Attendance exported as CSV', 'success');
+}
+
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const session = SESSIONS[currentSessionIdx];
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(37, 99, 235);
+  doc.text('Attendance Register', 14, 18);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`EduVision-AI — Smart Classroom`, 14, 26);
+  doc.text(`${session.label}  ·  ${session.date}  ·  ${session.time}`, 14, 32);
+
+  const present = session.students.filter(s => s.status === 'Present').length;
+  const late    = session.students.filter(s => s.status === 'Late').length;
+  const absent  = session.students.filter(s => s.status === 'Absent').length;
+  doc.text(`Present: ${present}   Late: ${late}   Absent: ${absent}   Total: ${session.students.length}`, 14, 38);
+
+  const tableRows = session.students.map((s, i) => [
+    i + 1,
+    s.name,
+    s.status,
+    s.mood.replace(/[^\x20-\x7E]/g, '').trim(),
+    s.time,
+  ]);
+
+  doc.autoTable({
+    startY: 44,
+    head: [['#', 'Name', 'Status', 'Mood', 'Time In']],
+    body: tableRows,
+    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+    bodyStyles: { fontSize: 9.5, textColor: [30, 41, 59] },
+    alternateRowStyles: { fillColor: [240, 244, 248] },
+    columnStyles: { 0: { halign: 'center', cellWidth: 10 }, 3: { halign: 'center' }, 5: { halign: 'center' } },
+    styles: { font: 'helvetica', cellPadding: 3 },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 3) {
+        const val = data.cell.raw;
+        if (val === 'Present') data.cell.styles.textColor = [5, 150, 105];
+        else if (val === 'Late')    data.cell.styles.textColor = [217, 119, 6];
+        else if (val === 'Absent')  data.cell.styles.textColor = [220, 38, 38];
+      }
+    }
+  });
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text('Generated by ClassMind AI — Smart Classroom Assistant', 14, doc.internal.pageSize.height - 8);
+
+  const sess2 = SESSIONS[currentSessionIdx];
+  doc.save(`attendance_${sess2.label.replace(' ','')}_${sess2.date.slice(-11).replace(/ /g,'-')}.pdf`);
+  toast('📄 PDF report downloaded', 'success');
+}
+
+// ══════════════════════════════════════
+//  LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock() {
+  const dash = document.getElementById('dash-date');
+  if(dash) dash.textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ══════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadDataFromAPI();
+
+  updateDashStats();
+  renderDashTable();
+  renderAnalytics();
+  renderSessionTabs();
+  renderSessionSummary();
+  renderAttendanceBadges();
+  renderAttendanceTable();
+  renderQuestionFeed();
+  renderTimeline();
+  renderWaveform();
+
+  // Poll for updated attendance + questions every 10 seconds
+  setInterval(async () => {
+    try {
+      const [sessions, questions] = await Promise.all([
+        fetch(`${API_BASE}/api/sessions`).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE}/api/questions`).then(r => r.json()).catch(() => []),
+      ]);
+      let changed = false;
+      if (sessions.length)  { SESSIONS  = sessions;  changed = true; }
+      if (questions.length) { QUESTIONS = questions; changed = true; }
+      if (changed) {
+        updateDashStats();
+        renderDashTable(); renderTimeline(); renderQuestionFeed();
+        renderSessionTabs(); renderSessionSummary(); renderAttendanceBadges(); renderAttendanceTable();
+        renderAnalytics();
+        if (_currentPage === 'speech') renderNLPQuestions();
+      }
+    } catch (_) {}
+  }, 10000);
+});
+</script>
+</body>
+</html>
